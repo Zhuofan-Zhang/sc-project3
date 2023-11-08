@@ -55,8 +55,9 @@ class NDNNode:
                     peer_port = int(port)
                     if peer_port != self.port:
                         if status == "ONLINE":
-                            self.peers.add((addr[0], peer_port))
-                            # print(f"Discovered peer at {addr[0]}:{peer_port}")
+                            if (addr[0], peer_port) not in self.peers:
+                                self.peers.add((addr[0], peer_port))
+                                print(f"Discovered peer at {addr[0]}:{peer_port}")
                         elif status == "OFFLINE":
                             self.peers.discard((addr[0], peer_port))
                             print(f"Peer at {addr[0]}:{peer_port} went offline")
@@ -99,7 +100,7 @@ def main():
             command = input(f'Node {args.id} - Enter command (interest/data/exit/add_fit): ').strip()
             if command == 'interest':
                 name = input('Enter name for interest: ').strip()
-                node.send_interest(node.peers.pop(), args.id)
+                node.send_interest(node.peers.pop(), name)
             elif command == 'data':
                 name = input('Enter name for data: ').strip()
                 data_content = input('Enter data content: ').strip()
