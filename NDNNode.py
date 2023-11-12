@@ -1,10 +1,11 @@
 import json
 import os
+import re
 import socket
 import threading
 import time
 
-from helper import build_packet
+from helper import build_packet, decode_command, is_alertable
 from sensor import Sensor
 
 
@@ -121,21 +122,41 @@ class NDNNode:
                 self.pit[name] = requester
                 print(f'added interest {name} with requester {requester}')
                 destination = [key for key, value in self.fib.items() if value == self.interest_fib[sensor_type]].pop(0)
-                # TODO: 更改destination为目的地node name
                 json_packet = build_packet('interest', self.node_name, destination, name, '')
                 self.send_packet(self.fib.get(destination), json_packet)
 
     def handle_data(self, data_packet):
-        print(f"Received {data_packet}")
         name = data_packet['name']
-        self.cs[name] = data_packet['data']
-        # Check Interest Table for pending interests
-        if name in self.pit:
+        data = str(data_packet['data'])
+        if re.compile(r'command').search(data):
+            actuator, command = decode_command(name, data)
+            print(f'{actuator.capitalize()} is turned {command}.')
+        elif re.compile(r'alert').search(data):
+            if self.node_name.__contains__('phone'):
+                print(f"Alert {name.split('/')[-1]} is set off.")
+            else:
+                destination = [key for key in self.fib.keys() if key.__contains__('phone')]
+                self.send_packet(self.fib.get(destination.pop()), data_packet)
+        elif name in self.pit:
             destination = self.pit.get(name)
             print(f"Transmitting data packet from {data_packet['sender']} to {destination}")
             data_packet['sender'] = self.node_name
             data_packet['destination'] = destination
             self.send_packet(self.fib.get(destination), data_packet)
+        else:
+            self.cs[name] = data
+            alert = is_alertable(name, data)
+            if alert:
+                if self.node_name.__contains__('phone'):
+                    print(f"Alert {name.split('/')[-1]} is set off.")
+                else:
+                    destinations = [key for key in self.fib.keys() if key.__contains__('phone')]
+                    data_packet['data'] = 'alert'
+                    print(f"Alerting {destinations}.")
+                    for phone in destinations:
+                        self.send_packet(self.fib.get(phone), data_packet)
+            else:
+                print(f"Received {data_packet}")
 
     def send_packet(self, peer, json_packet):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -170,15 +191,15 @@ def main():
         command = input(f'Node {node.node_name} - Enter command (interest/data/exit/add_fit): ').strip()
         if command == 'interest':
             destination = input('Enter destination node for interest packet: ').strip()
-            name = input('Enter name for data: ').strip()
-            json_packet = build_packet('interest', node.node_name, destination, f'{node.node_name}/{name}', '')
+            sensor_name = input('Enter sensor name: ').strip()
+            json_packet = build_packet('interest', node.node_name, destination, f'{node.node_name}/{sensor_name}', '')
             # send interest to node according to fib
             node.send_packet(node.fib.get(destination), json_packet)
         elif command == 'data':
             destination = input('Enter destination node for data packet: ').strip()
-            name = input('Enter name for data: ').strip()
+            sensor_name = input('Enter sensor name: ').strip()
             data_content = input('Enter data content: ').strip()
-            json_packet = build_packet('data', node.node_name, destination, f'{destination}/{name}', data_content)
+            json_packet = build_packet('data', node.node_name, destination, f'{destination}/{sensor_name}', data_content)
             # send data to node with the same data name
             node.send_packet(node.fib.get(destination), json_packet)
         elif command == 'exit':
