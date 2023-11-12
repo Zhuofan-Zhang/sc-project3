@@ -36,8 +36,28 @@ class ForwardingInfoBase:
         self.dv_table = self._init_distance_vector()
 
     # Public Methods:
+        
+    def __contains__(self, item):
+        return item in self.peer_list
 
     def add_entry(self, node_name, node_addr):
+        """
+        Add a neighbouring peer to the FIB.
+
+        Parameters
+        ----------
+        node_name : str
+            Name of the peer to add.
+        node_addr : (str, int)
+            Address of the peer as a tuple of IP address and port number.
+
+        Returns
+        -------
+        bool
+            Returns True if distance vector changed.
+            (Note: This always returns true and is kept for consistency)
+
+        """
         self.peer_list[node_name] = node_addr
         self._add_peer_to_distance_vector(node_name, set_as_nbr=True)
         dv_changed = self._calculate_distance_vector()
@@ -45,6 +65,21 @@ class ForwardingInfoBase:
         return True
 
     def remove_entry(self, node_name):
+        """
+        Remove a neighbouring peer from the FIB
+
+        Parameters
+        ----------
+        node_name : str
+            Name of the peer to remove.
+
+        Returns
+        -------
+        bool
+            Returns True if distance vector changed.
+            (Note: This always returns true and is kept for consistency)
+
+        """
         del self.peer_list[node_name]
         self._drop_peer_from_distance_vector(node_name)
         dv_changed = self._calculate_distance_vector()
@@ -52,12 +87,45 @@ class ForwardingInfoBase:
         return True
 
     def update_distance_vector(self, node_name, node_vector):
+        """
+        Update the FIB with a new distance vector from a neighbouring node.
+        The of the neighbour distance vector is overwritten by the new one 
+        and then the own distance vector is recalculated.
+
+        Parameters
+        ----------
+        node_name : str
+            Name of the peer that the vector belongs to.
+        node_vector : dict(str, float)
+            Distance vector belonging the neighbour.
+
+        Returns
+        -------
+        dv_changed : bool
+            Returns True if own distance vector changed.
+
+        """
         self._update_peer_distance_vector(node_name, node_vector)
         dv_changed = self._calculate_distance_vector()
         
         return dv_changed
 
     def get_route(self, data_name):
+        """
+        Get routes that lead to data_name. Returns a list of addresses in order
+        of longest prefix matches and shortest number of hops.
+
+        Parameters
+        ----------
+        data_name : str
+            Name of data that should be matched to a node.
+
+        Returns
+        -------
+        addr_to_try : List[(str, int)]
+            List of address of the peer as a tuple of IP address and port number.
+
+        """
         # Distance vector to neighbours
         dist_nbr = self.dv_table[[idx in self.peer_list.keys() for idx in self.dv_table.index]][self.name]
         
