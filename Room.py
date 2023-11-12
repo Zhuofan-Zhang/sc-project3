@@ -1,17 +1,13 @@
 """
 Room class
 """
-import threading
 from random import uniform
 from time import sleep
-from S import Sensor
 from Device import Device
 
-SENSOR_TYPES = ["temp", "humidity", "CO", "CO2", "motion", "radiation"]
-
 class Room:
-    def __init__(self):
-        self.sensors = [Sensor(sens_type) for sens_type in SENSOR_TYPES]
+    def __init__(self, room_id):
+        self.device = Device(room_id+"@d1", "localhost", 69, self)
         self.stats = {
             "temp": 20,         # Temp in degrees Celsius
             "humidity": 0.4,    # Humidity percentage as decimal
@@ -51,9 +47,8 @@ class Room:
             sleep(1)    
 
     def main(self):
-        for sensor in self.sensors:
-            sensor.main(self)
+        self.device.turn_on()
         self.simulate()
             
-room = Room()
+room = Room("room")
 room.main()
