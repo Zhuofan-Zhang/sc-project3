@@ -1,3 +1,11 @@
+"""
+Device class
+- Has sensors and triggers
+- Sensors read from the room stats of the passed in Room
+- Triggers are stored on device but passed down to DeviceSensor (read DeviceSensor to see how they work)
+- Trigger condition defaults set, but no default trigger functions yet
+"""
+
 import socket
 import json
 import threading
@@ -56,7 +64,16 @@ class Device:
     def turn_off(self):
         self._on = False
 
+    """
+    DeviceSensor class
+    - Reads the correct stat from the room (eg 'temp' sensor reads 'temp' stat)
+    - Has programmable trigger (trigger condition) and trigger function
+    - Trigger function will run if trigger condition met
+    - No Trigger function by default
 
+    And example of a trigger function would be to tell the rooms heater to turn off if the 
+    is within set range
+    """
     class DeviceSensor:
         def __init__(self, device_id, sensor_type, trigger):
             self.name = device_id + '@' + sensor_type

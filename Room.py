@@ -1,5 +1,7 @@
 """
 Room class
+- Simulates 'natural changes' and changes due to turned on apparatus (like heaters, lights)
+- Gets initialised with one device, but more can be added if needed
 """
 from random import uniform
 from time import sleep
@@ -27,31 +29,8 @@ class Room:
     def simulate(self):
         # simulate a change in the room stats
         while True:
-            # Update room stats via room apparatus that is on
             self.update_via_apparatus()
-            
-            # Simulate temperature fluctuation within a realistic range
-            self.stats["temp"] += uniform(-0.01, 0.01)
-            self.stats["temp"] = min(max(self.stats["temp"], -10), 40)
-
-            # Simulate humidity fluctuation within a realistic range
-            self.stats["humidity"] += uniform(-0.005, 0.005)
-            self.stats["humidity"] = min(max(self.stats["humidity"], 0), 1)
-
-            # Simulate CO and CO2 levels dropping in the absence of motion
-            self.stats["CO"] -= uniform(0, 2)
-            self.stats["CO2"] -= uniform(-2, 2)
-
-            # Keep CO and CO2 levels within a realistic range
-            self.stats["CO"] = min(max(self.stats["CO"], 0), 100)
-            self.stats["CO2"] = min(max(self.stats["CO2"], 300), 1000)
-
-            # Simulate radiation slightly fluctuating
-            self.stats["radiation"] += uniform(-0.05, 0.05)
-            self.stats["radiation"] = min(max(self.stats["radiation"], 0), 0.5)
-            sleep(1)   
-
-            # Todo, Simulate motion 
+            self.update_via_natural_changes()
 
     def update_via_apparatus(self):
         for _, app in self.apparatus.items():
@@ -62,6 +41,30 @@ class Room:
                     self.stats[app.affected_stat] += app.change_amount
                 elif app.change_type == "decrease_by":
                     self.stats[app.affected_stat] -= app.change_amount
+
+    def update_via_natural_changes(self):
+        # Simulate temperature fluctuation within a realistic range
+        self.stats["temp"] += uniform(-0.01, 0.01)
+        self.stats["temp"] = min(max(self.stats["temp"], -10), 40)
+
+        # Simulate humidity fluctuation within a realistic range
+        self.stats["humidity"] += uniform(-0.005, 0.005)
+        self.stats["humidity"] = min(max(self.stats["humidity"], 0), 1)
+
+        # Simulate CO and CO2 levels dropping in the absence of motion
+        self.stats["CO"] -= uniform(0, 2)
+        self.stats["CO2"] -= uniform(-2, 2)
+
+        # Keep CO and CO2 levels within a realistic range
+        self.stats["CO"] = min(max(self.stats["CO"], 0), 100)
+        self.stats["CO2"] = min(max(self.stats["CO2"], 300), 1000)
+
+        # Simulate radiation slightly fluctuating
+        self.stats["radiation"] += uniform(-0.05, 0.05)
+        self.stats["radiation"] = min(max(self.stats["radiation"], 0), 0.5)
+        sleep(1)   
+
+        # Todo, Simulate motion 
 
     def toggle_value(self, value):
         if value in ["motion", "heater", "light"]:
