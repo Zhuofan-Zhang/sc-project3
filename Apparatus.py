@@ -18,8 +18,4 @@ class Apparatus:
         self.change_type = change_type
         self.change_amount = change_amount
         self.on = False
-
-        # Todo, implement 'listen' functionality
-
-
     
