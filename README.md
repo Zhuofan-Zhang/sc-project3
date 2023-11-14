@@ -1,6 +1,6 @@
 Available sensor type:
 Device:
-temperature,light,humidity,radiation,co2,smoke,motion,smoke
+temperature,light,humidity,radiation,co2,co,motion,smoke
 Washing Machine
 washer,lock,load,electricity_usage,water_usage,rpm,temperature,duration
 
