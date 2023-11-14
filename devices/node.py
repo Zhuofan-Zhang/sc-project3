@@ -107,8 +107,8 @@ class NDNNode:
             # Send data if interest is in PIT
             self.send_data(data_name, data_packet)
         
-            # Store in content store
-            self.cs[data_name] = data_packet
+        # Store in content store
+        self.cs[data_name] = data_packet
             
             
     def get(self, data_name):
@@ -126,8 +126,8 @@ class NDNNode:
                            "name" : data_name,
                            "timestamp": timestamp
                           }
-            intrest_packet = json.dumps(json_packet).encode('utf-8')
-            self.send_interest(self, data_name, intrest_packet)
+            interest_packet = json.dumps(json_packet).encode('utf-8')
+            self.send_interest(self, data_name, interest_packet)
         
             # Block until it is in the content store or until timeout
             timer = threading.Thread(target=self.wait_for_data, args=(data_name, self.response_timeout))#, daemon=True)
