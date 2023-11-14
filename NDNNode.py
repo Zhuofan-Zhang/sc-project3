@@ -147,15 +147,18 @@ class NDNNode:
             self.cs[name] = data
             alert = is_alertable(name, data)
             if alert:
-                #TODO: 如果没有phone在线就不要alert
                 if self.node_name.__contains__('phone'):
                     print(f"Alert {name.split('/')[-1]} is set off.")
                 else:
                     destinations = [key for key in self.fib.keys() if key.__contains__('phone')]
-                    data_packet['data'] = 'alert'
-                    print(f"Alerting {destinations}.")
-                    for phone in destinations:
-                        self.send_packet(self.fib.get(phone), data_packet)
+                    # if there's no phone available the alerts are discarded
+                    if len(destinations) > 0:
+                        data_packet['data'] = 'alert'
+                        print(f"Alerting {destinations}.")
+                        for phone in destinations:
+                            self.send_packet(self.fib.get(phone), data_packet)
+                    else:
+                        print("Alert is discarded.")
             else:
                 print(f"Received {data_packet}")
 
@@ -178,12 +181,18 @@ def main():
     # parser.add_argument('--broadcast_port', type=int, required=True, help='The port number to bind the node to.')
     # args = parser.parse_args()
 
-    house_name = os.environ['HOUSE_NAME']
-    room_name = os.environ['ROOM_NAME']
-    device_name = os.environ['DEVICE_NAME']
-    port = int(os.environ['PORT'])
-    broadcast_port = int(os.environ['BROADCAST_PORT'])
-    sensor_type = os.environ['SENSOR_TYPE'].split(',')
+    house_name = 'house1'
+    # house_name = os.environ['HOUSE_NAME']
+    room_name = 'room1'
+    # room_name = os.environ['ROOM_NAME']
+    device_name = 'device1'
+    # device_name = os.environ['DEVICE_NAME']
+    port = 8001
+    # port = int(os.environ['PORT'])
+    broadcast_port = 33000
+    # broadcast_port = int(os.environ['BROADCAST_PORT'])
+    sensor_type = ['light', 'speed']
+    # sensor_type = os.environ['SENSOR_TYPE'].split(',')
 
     node = NDNNode(house_name, room_name, device_name, port, broadcast_port, sensor_type)
     node.start()
@@ -200,7 +209,8 @@ def main():
             destination = input('Enter destination node for data packet: ').strip()
             sensor_name = input('Enter sensor name: ').strip()
             data_content = input('Enter data content: ').strip()
-            json_packet = build_packet('data', node.node_name, destination, f'{destination}/{sensor_name}', data_content)
+            json_packet = build_packet('data', node.node_name, destination, f'{destination}/{sensor_name}',
+                                       data_content)
             # send data to node with the same data name
             node.send_packet(node.fib.get(destination), json_packet)
         elif command == 'exit':

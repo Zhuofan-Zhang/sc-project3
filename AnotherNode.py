@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import re
 import socket
 import threading
@@ -10,11 +11,12 @@ import fib
 from helper import build_packet, decode_command, is_alertable
 from sensor import Sensor
 
-API_VERSION = 'V3'
+API_VERSION = 'v2'
 
 
-class NDNNode:
-    def __init__(self, node_name, host, port, broadcast_port, presence_broadcast_interval=30, response_timeout=60,
+class AnotherNode:
+    def __init__(self, node_name, host, port, broadcast_port, sensor_types, presence_broadcast_interval=30,
+                 response_timeout=60,
                  logging_level=logging.INFO):
 
         self.node_name = node_name
@@ -30,7 +32,7 @@ class NDNNode:
         # Data storage
         self.pit = {}
         self.cs = {}
-        self.sensor_type = ['sensor_type']
+        self.sensor_type = sensor_types
         # TODO: Generate/Load public and private keys
         # self.pub_key_CA = None
         # self.pub_key = None
@@ -94,7 +96,7 @@ class NDNNode:
         # If in PIT forward data and remove entry from PIT
         if data_name in self.pit:
             # Send data if interest is in PIT
-            self.send_data(data_name, data_packet)
+            self.send_packet(data_name, data_packet)
 
         # Store in content store
         self.cs[data_name] = data_packet
@@ -168,12 +170,14 @@ class NDNNode:
                                         self.fib.add_entry(peer_name, peer_addr)
                                         # Send distance vector updates to neighbours
                                         self.broadcast_distance_vector()
+                                        print(f"{peer_name} is online")
                                 # Remove from FIB
                                 elif peer_status == "offline":
                                     if peer_name in self.fib:
                                         self.fib.remove_entry(peer_name)
                                         # Send distance vector updates to neighbours
                                         self.broadcast_distance_vector()
+                                        print(f"{peer_name} is offline")
                             elif message["type"] == "routing":
                                 peer_name = message["name"]
                                 peer_vector = message["data"]
@@ -346,3 +350,43 @@ class NDNNode:
                 print(f"Sent {packet_type} '{json_packet['name']}' to {json_packet['destination']}")
             except ConnectionRefusedError:
                 print(f"Failed to connect to {peer}")
+
+
+def main():
+    # parser = argparse.ArgumentParser(description='Run a NDN node.')
+    # parser.add_argument('--id', required=True, help='The port number to bind the node to.')
+    # parser.add_argument('--port', type=int, required=True, help='The port number to bind the node to.')
+    # parser.add_argument('--broadcast_port', type=int, required=True, help='The port number to bind the node to.')
+    # args = parser.parse_args()
+    # a = RoomDevice("/group21/house1/room1", "0.0.0.0", 8000, 33333, logging_level=logging.DEBUG)
+    # b = RoomDevice("/group21/house1/phone", "0.0.0.0", 8001, 33333, logging_level=logging.DEBUG)
+
+    node = AnotherNode("/group21/house1/room1", "0.0.0.0", 8000, 33333, ['light', 'speed'])
+    node.start()
+    # try:
+    while True:
+        command = input(f'Node {node.node_name} - Enter command (interest/data/exit/add_fit): ').strip()
+        if command == 'interest':
+            destination = input('Enter destination node for interest packet: ').strip()
+            sensor_name = input('Enter sensor name: ').strip()
+            json_packet = build_packet('interest', node.node_name, destination, f'{node.node_name}/{sensor_name}', '')
+            # send interest to node according to fib
+            node.send_packet(node.fib.get_route(f'{node.node_name}/{sensor_name}'), json_packet)
+        elif command == 'data':
+            destination = input('Enter destination node for data packet: ').strip()
+            sensor_name = input('Enter sensor name: ').strip()
+            data_content = input('Enter data content: ').strip()
+            json_packet = build_packet('data', node.node_name, destination, f'{destination}/{sensor_name}',
+                                       data_content)
+            # send data to node with the same data name
+            node.send_packet(node.fib.get_route(f'{node.node_name}/{sensor_name}'), json_packet)
+        elif command == 'exit':
+            node.broadcast_offline()
+            node.stop()
+            os._exit(0)
+        else:
+            print('Invalid command. Try again.')
+
+
+if __name__ == "__main__":
+    main()
