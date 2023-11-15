@@ -183,18 +183,24 @@ class NDNNode:
                     raise err
 
     def handle_connection(self, conn, addr):
+        """
+        Handle incomming TCP packets
+
+        """
         with conn:
-            while self.running:
+            while self.running.is_set():
                 data = conn.recv(1024)
                 if not data:
                     break
                 packet = json.loads(data.decode())
-                if packet['type'] == 'interest':
-                    print(f"Received interest packet from {packet['sender']}")
-                    self.handle_interest(packet, packet['sender'])
-                elif packet['type'] == 'data':
-                    print(f"Received data packet from {packet['sender']}")
-                    self.handle_data(packet)
+                
+                if packet["version"] == API_VERSION:
+                    if packet['type'] == 'interest':
+                        logging.debug(f"{self.node_name} received interest packet from {addr}")
+                        self.handle_interest(data, addr)
+                    elif packet['type'] == 'data':
+                        logging.debug(f"{self.node_name} received data packet from {addr}")
+                        self.handle_data(data)
 
     def handle_interest(self, interest_packet, requester):
         name = interest_packet['name']
