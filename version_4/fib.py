@@ -110,7 +110,7 @@ class ForwardingInfoBase:
         
         return dv_changed
 
-    def get_route(self, data_name):
+    def get_routes(self, data_name):
         """
         Get routes that lead to data_name. Returns a list of addresses in order
         of longest prefix matches and shortest number of hops.

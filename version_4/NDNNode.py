@@ -1,29 +1,30 @@
 import json
-import os
-import re
+#import os
+#import re
 import socket
 import threading
 import time
 import logging
+import random
 
-from helper import build_packet, decode_command, is_alertable
-from sensor import Sensor
+from helper import build_packet #, decode_command, is_alertable
+#from sensor import Sensor
 import fib
 
 API_VERSION = 'v4'
 
 class NDNNode:
-    def __init__(self, node_name, sensors, host, port, broadcast_port, presence_broadcast_interval=30, response_timeout=60, logging_level=logging.INFO):
+    def __init__(self, node_name, sensors, port, broadcast_port, presence_broadcast_interval=30, response_timeout=60, logging_level=logging.INFO):
         
         self.node_name = node_name
         
         # Create list of data name as <node_name>/<sensor_name>
         if not node_name.endswith('/'):
-            node_name =+ '/'
+            node_name += '/'
         self.data_names = [node_name+s for s in sensors]
         
         # Networking
-        self.host = host
+        self.host = socket.gethostbyname(socket.gethostname()) # Automatically get correct host
         self.port = port
         self.broadcast_port = broadcast_port
         self.fib = fib.ForwardingInfoBase(self.node_name)
@@ -71,14 +72,14 @@ class NDNNode:
         # Get data name as <node_name>/<sensor_name>
         data_name = self.node_name
         if not data_name.endswith('/'):
-            data_name =+ '/'
+            data_name += '/'
         data_name += sensor_name
         
         # Create packet
         json_packet = build_packet(packet_type = 'data', 
                                    name = data_name, 
                                    data = data,
-                                   version = API_VERSION
+                                   api_version = API_VERSION
                                    )
         
         data_packet = json.dumps(json_packet).encode('utf-8')
@@ -105,10 +106,10 @@ class NDNNode:
             json_packet = build_packet(packet_type = 'interest', 
                                        name = data_name, 
                                        data = None,
-                                       version = API_VERSION
+                                       api_version = API_VERSION
                                        )
             interest_packet = json.dumps(json_packet).encode('utf-8')
-            self.send_interest(self, data_name, None, interest_packet)
+            self.send_interest(data_name, None, interest_packet)
         
             # Block until it is in the content store or until timeout
             timer = threading.Thread(target=self.wait_for_data, args=(data_name, self.response_timeout))#, daemon=True)
@@ -164,11 +165,12 @@ class NDNNode:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             while self.running.is_set():
                 try:
+                    logging.debug(f"{self.node_name} broadcasting prescence on port {self.broadcast_port}")
                     json_packet = build_packet(packet_type = 'discovery', 
                                                name = self.node_name, 
                                                data = {'port' : self.port,
                                                        'status' : 'online'},
-                                               version = API_VERSION
+                                               api_version = API_VERSION
                                                )
                     s.sendto(json.dumps(json_packet).encode('utf-8'), ('<broadcast>', self.broadcast_port))
                     time.sleep(self.presence_broadcast_interval)
@@ -190,7 +192,7 @@ class NDNNode:
                                        name = self.node_name, 
                                        data = {'port' : self.port,
                                                'status' : 'offline'},
-                                       version = API_VERSION
+                                       api_version = API_VERSION
                                        )
             logging.info(f"{self.node_name} broadcasting offline announcment on port {self.broadcast_port}")
             s.sendto(json.dumps(json_packet).encode('utf-8'), ('<broadcast>', self.broadcast_port))
@@ -205,7 +207,7 @@ class NDNNode:
             json_packet = build_packet(packet_type = 'routing', 
                                        name = self.node_name, 
                                        data = self.fib.get_distance_vector(),
-                                       version = API_VERSION
+                                       api_version = API_VERSION
                                        )
             logging.debug(f"{self.node_name} broadcasting distance vector on port {self.broadcast_port}")
             s.sendto(json.dumps(json_packet).encode('utf-8'), ('<broadcast>', self.broadcast_port))
@@ -214,46 +216,53 @@ class NDNNode:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
             s.bind((self.host, self.broadcast_port))
+            logging.info(f"{self.node_name} is listening on port {self.broadcast_port}")
             while self.running.is_set():
                 try:
                     data, addr = s.recvfrom(1024)
-                    message = json.loads(data.decode())
                     
-                    if message["version"] == API_VERSION:
+                    if data:
+                        logging.debug(f"{self.node_name} recieved broadcast from {addr}")
+                        message = json.loads(data.decode())
                         
-                        # Ignore own broadcasts
-                        if addr[0] != self.host and addr[1] != self.port:
+                        if message["version"] == API_VERSION:
                             
-                            if message['type'] == 'discovery':
+                            # Ignore own broadcasts
+                            if addr[0] != self.host and addr[1] != self.port:
                                 
-                                peer_name = message["name"]
-                                peer_port = message["data"]["port"]
-                                peer_status = message["data"]["status"]
-                                
-                                # Add to FIB
-                                if peer_status == "online":
-                                    if peer_name not in self.fib:
-                                        peer_addr = (addr[0], peer_port)
-                                        self.fib.add_entry(self, peer_name, peer_addr)
+                                if message['type'] == 'discovery':
+                                    
+                                    peer_name = message["name"]
+                                    peer_port = message["data"]["port"]
+                                    peer_status = message["data"]["status"]
+                                    
+                                    # Add to FIB
+                                    if peer_status == "online":
+                                        if peer_name not in self.fib:
+                                            peer_addr = (addr[0], peer_port)
+                                            logging.debug(f"{self.node_name} adding peer {peer_name} on {peer_addr} to FIB")
+                                            self.fib.add_entry(peer_name, peer_addr)
+                                            # Send distance vector updates to neighbours
+                                            self.broadcast_distance_vector()
+                                            
+                                    # Remove from FIB
+                                    elif peer_status == "offline":
+                                        if peer_name in self.fib:
+                                            logging.debug(f"{self.node_name} removing peer {peer_name} on {peer_addr} to FIB")
+                                            self.fib.remove_entry(peer_name)
+                                            # Send distance vector updates to neighbours
+                                            self.broadcast_distance_vector()
+                                            
+                                elif message["type"] == "routing":
+                                    peer_name = message["name"]
+                                    peer_vector = message["data"]
+                                    
+                                    logging.debug(f"{self.node_name} updating peer {peer_name} on {peer_addr} in FIB")
+                                    dv_changed = self.fib.update_distance_vector(peer_name, peer_vector)
+                                    
+                                    if dv_changed:
                                         # Send distance vector updates to neighbours
                                         self.broadcast_distance_vector()
-                                        
-                                # Remove from FIB
-                                elif peer_status == "offline":
-                                    if peer_name in self.fib:
-                                        self.fib.remove_entry(peer_name)
-                                        # Send distance vector updates to neighbours
-                                        self.broadcast_distance_vector()
-                                        
-                            elif message["type"] == "routing":
-                                peer_name = message["name"]
-                                peer_vector = message["data"]
-                                
-                                dv_changed = self.fib.update_distance_vector(peer_name, peer_vector)
-                                
-                                if dv_changed:
-                                    # Send distance vector updates to neighbours
-                                    self.broadcast_distance_vector()
                                     
                 except KeyError as err:
                     logging.warning(f"{self.node_name} recieved and ignoring broadcast message with bad format: {err}")
@@ -411,44 +420,58 @@ def main():
     # parser.add_argument('--broadcast_port', type=int, required=True, help='The port number to bind the node to.')
     # args = parser.parse_args()
 
-    house_name = 'house1'
+    #house_name = 'house1'
     # house_name = os.environ['HOUSE_NAME']
-    room_name = 'room1'
+    #room_name = 'room1'
     # room_name = os.environ['ROOM_NAME']
-    device_name = 'device1'
+    #device_name = 'device1'
     # device_name = os.environ['DEVICE_NAME']
-    port = 8001
+    #port = 8001
     # port = int(os.environ['PORT'])
-    broadcast_port = 33000
+    #broadcast_port = 
     # broadcast_port = int(os.environ['BROADCAST_PORT'])
-    sensor_type = ['light', 'speed']
+    #sensor_type = ['foo', 'bar']
     # sensor_type = os.environ['SENSOR_TYPE'].split(',')
 
-    node = NDNNode(house_name, room_name, device_name, port, broadcast_port, sensor_type)
-    node.start()
-    # try:
+    node1 = NDNNode("/house1/room1/device1", sensors=['foo'], port=33001, broadcast_port=33000, logging_level=logging.DEBUG)
+    node1.start()
+    
+    node2 = NDNNode("/house1/room2/device1", sensors=['bar'], port=33002, broadcast_port=33000, logging_level=logging.DEBUG)
+    node2.start()
+    
+    
     while True:
-        command = input(f'Node {node.node_name} - Enter command (interest/data/exit/add_fit): ').strip()
-        if command == 'interest':
-            destination = input('Enter destination node for interest packet: ').strip()
-            sensor_name = input('Enter sensor name: ').strip()
-            json_packet = build_packet('interest', node.node_name, destination, f'{node.node_name}/{sensor_name}', '')
-            # send interest to node according to fib
-            node.send_packet(node.fib.get(destination), json_packet)
-        elif command == 'data':
-            destination = input('Enter destination node for data packet: ').strip()
-            sensor_name = input('Enter sensor name: ').strip()
-            data_content = input('Enter data content: ').strip()
-            json_packet = build_packet('data', node.node_name, destination, f'{destination}/{sensor_name}',
-                                       data_content)
-            # send data to node with the same data name
-            node.send_packet(node.fib.get(destination), json_packet)
-        elif command == 'exit':
-            node.broadcast_offline()
-            node.stop()
-            os._exit(0)
-        else:
-            print('Invalid command. Try again.')
+        node1.set('foo', random.randint(0, 10))
+        node1.get('/house1/room2/device1/bar')
+        
+        node2.set('bar', random.randint(0, 10))
+        node2.get('/house1/room1/device1/foo')
+        
+        
+        time.sleep(10)
+    # try:
+    #while True:
+    #    command = input(f'Node {node.node_name} - Enter command (interest/data/exit/add_fit): ').strip()
+    #    if command == 'interest':
+    #        destination = input('Enter destination node for interest packet: ').strip()
+    #        sensor_name = input('Enter sensor name: ').strip()
+    #        json_packet = build_packet('interest', node.node_name, destination, f'{node.node_name}/{sensor_name}', '')
+    #        # send interest to node according to fib
+    #        node.send_packet(node.fib.get(destination), json_packet)
+    #    elif command == 'data':
+    #        destination = input('Enter destination node for data packet: ').strip()
+    #        sensor_name = input('Enter sensor name: ').strip()
+    #        data_content = input('Enter data content: ').strip()
+    #        json_packet = build_packet('data', node.node_name, destination, f'{destination}/{sensor_name}',
+    #                                   data_content)
+    #        # send data to node with the same data name
+    #        node.send_packet(node.fib.get(destination), json_packet)
+    #    elif command == 'exit':
+    #        node.broadcast_offline()
+    #        node.stop()
+    #        os._exit(0)
+    #    else:
+    #        print('Invalid command. Try again.')
 
 
 if __name__ == "__main__":

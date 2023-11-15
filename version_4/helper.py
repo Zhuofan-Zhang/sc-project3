@@ -39,7 +39,7 @@ def build_packet(packet_type, name, data, api_version):
     time_stamp = current_time_utc.isoformat()
     
     json_packet = {'type': packet_type,
-                   'version': API_VERSION,
+                   'version': api_version,
                    #'sender': sender,
                    #'destination': destination,
                    'timestamp': time_stamp,
