@@ -249,8 +249,40 @@ class NDNNode:
                 logging.warning(f"{self.node_name} failed to forwarded interest in {name}")
 
     def handle_data(self, data_packet):
-        name = data_packet['name']
-        data = str(data_packet['data'])
+        message = json.loads(data_packet.decode())
+        name = message['name']
+        
+        if name in self.pit:
+            # TODO: check signature
+            
+            # Send data if interest is in PIT
+            self.send_data(name, data_packet)
+        
+            # Store in content store
+            self.cs[name] = data_packet
+            
+    def send_data(self, name, data_packet):
+        """
+        If in PIT forward data and remove entry from PIT
+        
+        """
+        success = False
+        for addr in self.pit.pop(name):
+            try:
+                if addr != (self.host, self.port):
+                    self.send_packet(addr, data_packet)
+                success = True
+                logging.debug(f"{self.node_name} forwarded data {name} to {addr}")
+                break
+            except Exception as err:
+                logging.debug(f"{self.node_name} failed to forward data to {addr}: {err}")
+                # TODO: remove addr from FIB?
+                
+        if not success:
+            logging.warning(f"{self.node_name} failed to forwarded data {name}") 
+        
+        # TODO: Move this logic outside of this class
+        """
         if re.compile(r'command').search(data):
             actuator, command = decode_command(name, data)
             print(f'{actuator.capitalize()} is turned {command}.')
@@ -284,15 +316,14 @@ class NDNNode:
                         print("Alert is discarded.")
             else:
                 print(f"Received {data_packet}")
+                
+        """
 
-    def send_packet(self, peer, json_packet):
+    def send_packet(self, peer, packet):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
                 s.connect(peer)
-                packet = json.dumps(json_packet).encode('utf-8')
                 s.sendall(packet)
-                packet_type = json_packet['type']
-                print(f"Sent {packet_type} '{json_packet['name']}' to {json_packet['destination']}")
             except ConnectionRefusedError:
                 print(f"Failed to connect to {peer}")
 
