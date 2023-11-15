@@ -74,21 +74,56 @@ class NDNNode:
                     raise err
                     
     def broadcast_presence(self):
+        """
+        Regularly broadcast presence to neighbours
+
+        """
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            while self.running:
-                json_packet = build_packet('discovery', self.node_name, 'broadcast_node', 'online',
-                                           f"{self.port}:{','.join(self.sensor_type)}")
-                s.sendto(json.dumps(json_packet).encode('utf-8'), ('<broadcast>', self.broadcast_port))
-                time.sleep(1)
+            while self.running.is_set():
+                try:
+                    json_packet = build_packet(packet_type = 'discovery', 
+                                               name = self.node_name, 
+                                               data = {'port' : self.port,
+                                                       'status' : 'online'}
+                                               )
+                    s.sendto(json.dumps(json_packet).encode('utf-8'), ('<broadcast>', self.broadcast_port))
+                    time.sleep(self.presence_broadcast_interval)
+                    
+                except Exception as err:
+                    # Stop threads
+                    self.stop()
+                    logging.error(f"{self.node_name}: broadcast_presence(): {err}")
+                    raise err
 
     def broadcast_offline(self):
+        """
+        Broadcast when leaving the network
+
+        """
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            json_packet = build_packet('discovery', self.node_name, 'broadcast_node', 'offline',
-                                       f"{self.port}:{','.join(self.sensor_type)}")
+            json_packet = build_packet(packet_type = 'discovery', 
+                                       name = self.node_name, 
+                                       data = {'port' : self.port,
+                                               'status' : 'offline'}
+                                       )
+            logging.info(f"{self.node_name} broadcasting offline announcment on port {self.broadcast_port}")
             s.sendto(json.dumps(json_packet).encode('utf-8'), ('<broadcast>', self.broadcast_port))
-        print('offline')
+        
+    def broadcast_distance_vector(self):
+        """
+        Broadcast when distance vector changes
+
+        """
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            json_packet = build_packet(packet_type = 'routing', 
+                                       name = self.node_name, 
+                                       data = self.fib.get_distance_vector()
+                                       )
+            logging.debug(f"{self.node_name} broadcasting distance vector on port {self.broadcast_port}")
+            s.sendto(json.dumps(json_packet).encode('utf-8'), ('<broadcast>', self.broadcast_port))
 
     def listen_for_peer_broadcasts(self):
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
