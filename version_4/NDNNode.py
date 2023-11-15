@@ -13,9 +13,14 @@ import fib
 API_VERSION = 'v4'
 
 class NDNNode:
-    def __init__(self, node_name, host, port, broadcast_port, presence_broadcast_interval=30, response_timeout=60, logging_level=logging.INFO):
+    def __init__(self, node_name, sensors, host, port, broadcast_port, presence_broadcast_interval=30, response_timeout=60, logging_level=logging.INFO):
         
         self.node_name = node_name
+        
+        # Create list of data name as <node_name>/<sensor_name>
+        if not node_name.endswith('/'):
+            node_name =+ '/'
+        self.data_names = [node_name+s for s in sensors]
         
         # Networking
         self.host = host
@@ -202,27 +207,46 @@ class NDNNode:
                         logging.debug(f"{self.node_name} received data packet from {addr}")
                         self.handle_data(data)
 
-    def handle_interest(self, interest_packet, requester):
-        name = interest_packet['name']
+    def handle_interest(self, interest_packet, source_addr):
+        message = json.loads(interest_packet.decode())
+        name = message['name']
+        
         # Check Content Store first
         if name in self.cs:
-            data = self.cs.get(name)
-            json_packet = build_packet('data', self.node_name, requester, name, data)
-            self.send_packet(self.fib.get(requester), json_packet)
+            data_packet = self.cs.get(name)
+            logging.debug(f"{self.name} sending data {name}")
+            self.send_packet(source_addr, data_packet)
         else:
-            # Add to Interest Table and forward based on FIB
-            sensor_type = interest_packet['name'].split('/').pop(4)
-            if sensor_type in self.sensor_type:
-                data = Sensor.generators.get(sensor_type, lambda: None)()
-                # print(f'Generated {name} for requester {requester}')
-                json_packet = build_packet('data', self.node_name, requester, name, data)
-                self.send_packet(self.fib.get(requester), json_packet)
+            self.send_interest(self, name, source_addr, interest_packet)
+            
+    def send_interest(self, name, source_addr, interest_packet):
+        # Add interest to PIT
+        if name not in self.pit:
+            self.pit[name] = set([source_addr])
+        else:
+            self.pit[name].add(source_addr)
+            
+        # Check if this node is source of the data
+        # If not forward interest
+        if name not in self.data_names:
+            
+            # Get neighbours to forward intrest to
+            addr_to_try = self.fib.get_routes(name)
+            
+            success = False
+            for addr in addr_to_try:
+                try:
+                    self.send_packet(addr, interest_packet)
+                    success = True
+                    break
+                except Exception as err:
+                    logging.debug(f"{self.node_name} failed to forward interest to {addr}: {err}")
+                    # TODO: remove addr from FIB?
+                    
+            if success:
+                logging.debug(f"{self.node_name} forwarded interest in {name} to {addr}")
             else:
-                self.pit[name] = requester
-                print(f'added interest {name} with requester {requester}')
-                destination = [key for key, value in self.fib.items() if value == self.interest_fib[sensor_type]].pop(0)
-                json_packet = build_packet('interest', self.node_name, destination, name, '')
-                self.send_packet(self.fib.get(destination), json_packet)
+                logging.warning(f"{self.node_name} failed to forwarded interest in {name}")
 
     def handle_data(self, data_packet):
         name = data_packet['name']
