@@ -132,7 +132,7 @@ class NDNNode:
             # Block until it is in the content store or until timeout
             timer = threading.Thread(target=self.wait_for_data, args=(data_name, self.response_timeout))#, daemon=True)
             timer.start()
-            timer.join() # Block untill data incontent store or timeout
+            timer.join() # Block until data incontent store or timeout
             
             if data_name in self.cs:
                 data_packet = self.cs.get(data_name)
@@ -379,6 +379,9 @@ class NDNNode:
         else:
             self.pit[name].add(source_addr)
             
+        # TODO: check if this node is the data source
+        
+        
         # Get neighbours to forward intrest to
         addr_to_try = self.fib.get_routes(name)
         
