@@ -6,6 +6,7 @@ import threading
 import time
 import logging
 import random
+import argparse
 
 from helper import build_packet #, decode_command, is_alertable
 #from sensor import Sensor
@@ -414,11 +415,13 @@ class NDNNode:
 
 
 def main():
-    # parser = argparse.ArgumentParser(description='Run a NDN node.')
-    # parser.add_argument('--id', required=True, help='The port number to bind the node to.')
-    # parser.add_argument('--port', type=int, required=True, help='The port number to bind the node to.')
-    # parser.add_argument('--broadcast_port', type=int, required=True, help='The port number to bind the node to.')
-    # args = parser.parse_args()
+    parser = argparse.ArgumentParser(description='Run a NDN node.')
+    parser.add_argument('--node-name', type=str, required=True, help='The node name.')
+    parser.add_argument('--sensor-name', type=str, required=True, help='The sensor name.')
+    parser.add_argument('--get', type=str, required=True, help='The data name to get.')
+    parser.add_argument('--port', type=int, required=True, help='The port number to bind the node to.')
+    parser.add_argument('--broadcast-port', type=int, required=True, help='The port number to bind the node to.')
+    args = parser.parse_args()
 
     #house_name = 'house1'
     # house_name = os.environ['HOUSE_NAME']
@@ -433,20 +436,13 @@ def main():
     #sensor_type = ['foo', 'bar']
     # sensor_type = os.environ['SENSOR_TYPE'].split(',')
 
-    node1 = NDNNode("/house1/room1/device1", sensors=['foo'], port=33001, broadcast_port=33000, logging_level=logging.DEBUG)
-    node1.start()
-    
-    node2 = NDNNode("/house1/room2/device1", sensors=['bar'], port=33002, broadcast_port=33000, logging_level=logging.DEBUG)
-    node2.start()
+    node= NDNNode(args.node_name, sensors=[args.sensor_name], port=args.port, broadcast_port=args.broadcast_port, logging_level=logging.DEBUG)
+    node.start()
     
     
     while True:
-        node1.set('foo', random.randint(0, 10))
-        node1.get('/house1/room2/device1/bar')
-        
-        node2.set('bar', random.randint(0, 10))
-        node2.get('/house1/room1/device1/foo')
-        
+        node.set(args.sensor_name, random.randint(0, 10))
+        node.get(args.get)        
         
         time.sleep(10)
     # try:
