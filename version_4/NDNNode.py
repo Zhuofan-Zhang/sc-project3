@@ -4,22 +4,40 @@ import re
 import socket
 import threading
 import time
+import logging
 
 from helper import build_packet, decode_command, is_alertable
 from sensor import Sensor
+import fib
 
 
 class NDNNode:
-    def __init__(self, house_name, room_name, device_name, port, broadcast_port, sensor_type):
-        self.host = '0.0.0.0'
+    def __init__(self, node_name, host, port, broadcast_port, presence_broadcast_interval=30, response_timeout=60, logging_level=logging.INFO):
+        
+        self.node_name = node_name
+        
+        # Networking
+        self.host = host
         self.port = port
-        self.node_name = f"/{house_name}/{room_name}/{device_name}"
         self.broadcast_port = broadcast_port
-        self.fib = {}  # Forwarding Information Base
-        self.interest_fib = {}
-        self.pit = {}  # Pending Interest Table
-        self.cs = {'/Node_8000': 'test1', '/Node_8001': 'test2'}
-        self.sensor_type = sensor_type
+        self.fib = fib.ForwardingInfoBase(self.node_name)
+        self.presence_broadcast_interval = presence_broadcast_interval
+        self.response_timeout = response_timeout
+
+        # Data storage
+        self.pit = {}
+        self.cs = {}
+        
+        # TODO: Generate/Load public and private keys
+        #self.pub_key_CA = None
+        #self.pub_key = None
+        #self.priv_key = None
+        #self.key_store = {} # Like content store except for keys
+        
+        # Logging verbosity
+        logging.basicConfig(format="%(asctime)s.%(msecs)04d [%(levelname)s] %(message)s", level=logging_level, datefmt="%H:%M:%S:%m")
+        
+        # Threading
         self.threads = []
         self.running = threading.Event()
         self.running.set()
