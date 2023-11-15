@@ -10,15 +10,15 @@ from sensor import Sensor
 
 
 class NDNNode:
-    def __init__(self, house_name, room_name, device_name, port, broadcast_port, sensor_type):
+    def __init__(self, node_name, port, broadcast_port, sensor_type):
         self.host = '0.0.0.0'
         self.port = port
-        self.node_name = f"/{house_name}/{room_name}/{device_name}"
+        self.node_name = node_name
         self.broadcast_port = broadcast_port
         self.fib = {}  # Forwarding Information Base
         self.interest_fib = {}
         self.pit = {}  # Pending Interest Table
-        self.cs = {'/Node_8000': 'test1', '/Node_8001': 'test2'}
+        self.cs = {}
         self.sensor_type = sensor_type
         self.threads = []
         self.running = threading.Event()
@@ -33,8 +33,9 @@ class NDNNode:
             t.start()
 
     def stop(self):
+        self.broadcast_offline()
         self.running.clear()
-        print(self.running.is_set())
+        os._exit(0)
 
     def listen_for_connections(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -181,44 +182,37 @@ def main():
     # parser.add_argument('--broadcast_port', type=int, required=True, help='The port number to bind the node to.')
     # args = parser.parse_args()
 
-    house_name = 'house1'
-    # house_name = os.environ['HOUSE_NAME']
-    room_name = 'room1'
-    # room_name = os.environ['ROOM_NAME']
-    device_name = 'device1'
-    # device_name = os.environ['DEVICE_NAME']
-    port = 8001
-    # port = int(os.environ['PORT'])
-    broadcast_port = 33000
-    # broadcast_port = int(os.environ['BROADCAST_PORT'])
-    sensor_type = ['light', 'speed']
-    # sensor_type = os.environ['SENSOR_TYPE'].split(',')
+    node_name = os.environ['NODE_NAME']
+    port = int(os.environ['PORT'])
+    broadcast_port = int(os.environ['BROADCAST_PORT'])
+    sensor_type = os.environ['SENSOR_TYPE'].split(',')
 
-    node = NDNNode(house_name, room_name, device_name, port, broadcast_port, sensor_type)
+    node = NDNNode(node_name, port, broadcast_port, sensor_type)
     node.start()
-    # try:
-    while True:
-        command = input(f'Node {node.node_name} - Enter command (interest/data/exit/add_fit): ').strip()
-        if command == 'interest':
-            destination = input('Enter destination node for interest packet: ').strip()
-            sensor_name = input('Enter sensor name: ').strip()
-            json_packet = build_packet('interest', node.node_name, destination, f'{node.node_name}/{sensor_name}', '')
-            # send interest to node according to fib
-            node.send_packet(node.fib.get(destination), json_packet)
-        elif command == 'data':
-            destination = input('Enter destination node for data packet: ').strip()
-            sensor_name = input('Enter sensor name: ').strip()
-            data_content = input('Enter data content: ').strip()
-            json_packet = build_packet('data', node.node_name, destination, f'{destination}/{sensor_name}',
-                                       data_content)
-            # send data to node with the same data name
-            node.send_packet(node.fib.get(destination), json_packet)
-        elif command == 'exit':
-            node.broadcast_offline()
-            node.stop()
-            os._exit(0)
-        else:
-            print('Invalid command. Try again.')
+    try:
+        while True:
+            command = input(f'Node {node.node_name} - Enter command (interest/data/exit/add_fit): ').strip()
+            if command == 'interest':
+                destination = input('Enter destination node for interest packet: ').strip()
+                sensor_name = input('Enter sensor name: ').strip()
+                json_packet = build_packet('interest', node.node_name, destination, f'{node.node_name}/{sensor_name}',
+                                           '')
+                # send interest to node according to fib
+                node.send_packet(node.fib.get(destination), json_packet)
+            elif command == 'data':
+                destination = input('Enter destination node for data packet: ').strip()
+                sensor_name = input('Enter sensor name: ').strip()
+                data_content = input('Enter data content: ').strip()
+                json_packet = build_packet('data', node.node_name, destination, f'{destination}/{sensor_name}',
+                                           data_content)
+                # send data to node with the same data name
+                node.send_packet(node.fib.get(destination), json_packet)
+            elif command == 'exit':
+                node.stop()
+            else:
+                print('Invalid command. Try again.')
+    except KeyboardInterrupt:
+        node.stop()
 
 
 if __name__ == "__main__":
