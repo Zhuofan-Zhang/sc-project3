@@ -55,14 +55,24 @@ class NDNNode:
         print(self.running.is_set())
 
     def listen_for_connections(self):
+        """
+        Listen for TCP connections (for intrest and data packets)
+
+        """
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind((self.host, self.port))
             s.listen()
-            print(f"Node is listening on port {self.port}")
-            while self.running:
-                conn, addr = s.accept()
-                threading.Thread(target=self.handle_connection, args=(conn, addr)).start()
-
+            logging.info(f"{self.node_name} is listening on port {self.port}")
+            while self.running.is_set():
+                try:
+                    conn, addr = s.accept()
+                    threading.Thread(target=self.handle_connection, args=(conn, addr)).start() #, daemon=True).start()
+                except Exception as err:
+                    # Stop threads
+                    self.stop()
+                    logging.error(f"{self.node_name}: listen_for_connections(): {err}")
+                    raise err
+                    
     def broadcast_presence(self):
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
