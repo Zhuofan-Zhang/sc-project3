@@ -10,6 +10,7 @@ from helper import build_packet, decode_command, is_alertable
 from sensor import Sensor
 import fib
 
+API_VERSION = 'v4'
 
 class NDNNode:
     def __init__(self, node_name, host, port, broadcast_port, presence_broadcast_interval=30, response_timeout=60, logging_level=logging.INFO):
@@ -85,7 +86,8 @@ class NDNNode:
                     json_packet = build_packet(packet_type = 'discovery', 
                                                name = self.node_name, 
                                                data = {'port' : self.port,
-                                                       'status' : 'online'}
+                                                       'status' : 'online'},
+                                               version = API_VERSION
                                                )
                     s.sendto(json.dumps(json_packet).encode('utf-8'), ('<broadcast>', self.broadcast_port))
                     time.sleep(self.presence_broadcast_interval)
@@ -106,7 +108,8 @@ class NDNNode:
             json_packet = build_packet(packet_type = 'discovery', 
                                        name = self.node_name, 
                                        data = {'port' : self.port,
-                                               'status' : 'offline'}
+                                               'status' : 'offline'},
+                                       version = API_VERSION
                                        )
             logging.info(f"{self.node_name} broadcasting offline announcment on port {self.broadcast_port}")
             s.sendto(json.dumps(json_packet).encode('utf-8'), ('<broadcast>', self.broadcast_port))
@@ -120,7 +123,8 @@ class NDNNode:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             json_packet = build_packet(packet_type = 'routing', 
                                        name = self.node_name, 
-                                       data = self.fib.get_distance_vector()
+                                       data = self.fib.get_distance_vector(),
+                                       version = API_VERSION
                                        )
             logging.debug(f"{self.node_name} broadcasting distance vector on port {self.broadcast_port}")
             s.sendto(json.dumps(json_packet).encode('utf-8'), ('<broadcast>', self.broadcast_port))
@@ -129,28 +133,54 @@ class NDNNode:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
             s.bind((self.host, self.broadcast_port))
-            while self.running:
-                data, addr = s.recvfrom(1024)
-                message = json.loads(data.decode())
-                if message['type'] == 'discovery':
-                    status, node_name, port, sensor_types = message['name'], message['sender'], message['data'].split(
-                        ':').pop(0), message['data'].split(':').pop(1).split(',')
-                    peer_port = int(port)
-                    if peer_port != self.port:
-                        if status == "online":
-                            peer = (addr[0], peer_port)
-                            if node_name not in self.fib:
-                                print(f"Discovered peer {node_name}")
-                                self.fib[node_name] = peer
-                                for sensor in sensor_types:
-                                    self.interest_fib[sensor] = peer
-                        elif status == "offline":
-                            if node_name in self.fib:
-                                del self.fib[node_name]
-                                for sensor in sensor_types:
-                                    del self.interest_fib[sensor]
-                                    print(f'Removed sensor {sensor}')
-                                print(f"Peer {node_name} went offline")
+            while self.running.is_set():
+                try:
+                    data, addr = s.recvfrom(1024)
+                    message = json.loads(data.decode())
+                    
+                    if message["version"] == API_VERSION:
+                        
+                        # Ignore own broadcasts
+                        if addr[0] != self.host and addr[1] != self.port:
+                            
+                            if message['type'] == 'discovery':
+                                
+                                peer_name = message["name"]
+                                peer_port = message["data"]["port"]
+                                peer_status = message["data"]["status"]
+                                
+                                # Add to FIB
+                                if peer_status == "online":
+                                    if peer_name not in self.fib:
+                                        peer_addr = (addr[0], peer_port)
+                                        self.fib.add_entry(self, peer_name, peer_addr)
+                                        # Send distance vector updates to neighbours
+                                        self.broadcast_distance_vector()
+                                        
+                                # Remove from FIB
+                                elif peer_status == "offline":
+                                    if peer_name in self.fib:
+                                        self.fib.remove_entry(peer_name)
+                                        # Send distance vector updates to neighbours
+                                        self.broadcast_distance_vector()
+                                        
+                            elif message["type"] == "routing":
+                                peer_name = message["name"]
+                                peer_vector = message["data"]
+                                
+                                dv_changed = self.fib.update_distance_vector(peer_name, peer_vector)
+                                
+                                if dv_changed:
+                                    # Send distance vector updates to neighbours
+                                    self.broadcast_distance_vector()
+                                    
+                except KeyError as err:
+                    logging.warning(f"{self.node_name} recieved and ignoring broadcast message with bad format: {err}")
+                except Exception as err:
+                    # Stop threads
+                    self.stop()
+                    logging.error(f"{self.node_name}: listen_for_peer_broadcasts(): {err}")
+                    raise err
 
     def handle_connection(self, conn, addr):
         with conn:

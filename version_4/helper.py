@@ -1,9 +1,9 @@
 from datetime import datetime, timezone
 
-API_VERSION = 'v4'
 
 
-def build_packet(packet_type, name, data):
+
+def build_packet(packet_type, name, data, api_version):
     """
     Presence packet:
         version = version of the API
