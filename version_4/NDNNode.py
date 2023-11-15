@@ -59,6 +59,82 @@ class NDNNode:
     def stop(self):
         self.running.clear()
         print(self.running.is_set())
+        
+    def set(self, sensor_name, data):
+        """
+        Create data packet with data, send if interest in PIT and store in content store.
+        
+        Note: sensor_name should just be name of the sensor. 
+              Node name is automatically added as prefix!
+
+        """
+        # Get data name as <node_name>/<sensor_name>
+        data_name = self.node_name
+        if not data_name.endswith('/'):
+            data_name =+ '/'
+        data_name += sensor_name
+        
+        # Create packet
+        json_packet = build_packet(packet_type = 'data', 
+                                   name = data_name, 
+                                   data = data,
+                                   version = API_VERSION
+                                   )
+        
+        data_packet = json.dumps(json_packet).encode('utf-8')
+        
+        # TODO: sign packet
+        
+        # If in PIT forward data and remove entry from PIT
+        if data_name in self.pit:
+            # Send data if interest is in PIT
+            self.send_data(data_name, data_packet)
+        
+        # Store in content store
+        self.cs[data_name] = data_packet
+            
+            
+    def get(self, data_name):
+        # If in content store return
+        if data_name in self.cs:
+            data_packet = self.cs.get(data_name)
+          
+        # If not in content store, send interest package
+        else:
+            # Create packet
+            json_packet = build_packet(packet_type = 'interest', 
+                                       name = data_name, 
+                                       data = None,
+                                       version = API_VERSION
+                                       )
+            interest_packet = json.dumps(json_packet).encode('utf-8')
+            self.send_interest(self, data_name, None, interest_packet)
+        
+            # Block until it is in the content store or until timeout
+            timer = threading.Thread(target=self.wait_for_data, args=(data_name, self.response_timeout))#, daemon=True)
+            timer.start()
+            timer.join() # Block untill data incontent store or timeout
+            
+            if data_name in self.cs:
+                data_packet = self.cs.get(data_name)
+            else:
+                data_packet = None
+        
+        return data_packet
+        
+        
+    def wait_for_data(self, data_name, timeout):
+        while self.running.is_set():
+            try:
+                time.sleep(1)
+                timeout -= 1
+                if timeout <= 0 or data_name in self.cs:
+                    break
+            except Exception as err:
+                # Stop threads
+                self.stop()
+                logging.error(f"{self.node_name}: wait_for_data(): {err}")
+                raise err
 
     def listen_for_connections(self):
         """
