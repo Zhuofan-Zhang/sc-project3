@@ -53,6 +53,10 @@ numerical_sensor_list = ['temperature', 'light', 'humidity', 'radiation', 'co2',
 binary_sensor_list = ['light_switch', 'motion', 'motor', 'lock']
 
 
+def get_sensor_type(name):
+    return name.split('/')[-1]
+
+
 def decode_command(name, data):
     actuator = name.split('/')[-1]
     command = data.split('/')[-1]

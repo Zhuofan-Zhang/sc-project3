@@ -20,10 +20,10 @@ API_VERSION = 'v2'
 
 class NDNNode:
     def __init__(self, node_name, port, broadcast_port, sensor_type):
-        
+
         # Logging verbosity
         logging.basicConfig(format="%(asctime)s.%(msecs)04d [%(levelname)s] %(message)s", level=logging.DEBUG, datefmt="%H:%M:%S:%m")
-        
+
         self.host = '0.0.0.0'
         self.port = port
         self.node_name = node_name
@@ -32,13 +32,13 @@ class NDNNode:
         self.pit = {}  # Pending Interest Table
         self.cs = {}
         self.sensor_type = sensor_type
-        
+
         # Create list of data name as <node_name>/<sensor_name>
         if not node_name.endswith('/'):
             node_name += '/'
         self.data_names = [node_name+s for s in sensor_type]
         logging.info(f"{self.node_name} is the source for: {self.data_names}")
-        
+
         self.ecc_manager = ECCManager()
         self.public_key_pem = self.ecc_manager.get_public_key().public_bytes(
             encoding=serialization.Encoding.PEM,
@@ -48,8 +48,8 @@ class NDNNode:
         self.threads = []
         self.running = threading.Event()
         self.running.set()
-        
-        
+
+
 
     def start(self):
         listener_thread = threading.Thread(target=self.listen_for_connections)
@@ -79,8 +79,8 @@ class NDNNode:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 
             while self.running:
-                json_packet = build_broadcast_packet(packet_type = 'discovery', 
-                                                     name = self.node_name, 
+                json_packet = build_broadcast_packet(packet_type = 'discovery',
+                                                     name = self.node_name,
                                                      data = {'port' : self.port,
                                                              'status' : 'online',
                                                              'pub_key' : self.public_key_pem,
@@ -93,8 +93,8 @@ class NDNNode:
     def broadcast_offline(self):
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            json_packet = build_broadcast_packet(packet_type = 'discovery', 
-                                                 name = self.node_name, 
+            json_packet = build_broadcast_packet(packet_type = 'discovery',
+                                                 name = self.node_name,
                                                  data = {'port' : self.port,
                                                          'status' : 'offline',
                                                          'pub_key' : self.public_key_pem,
@@ -103,7 +103,7 @@ class NDNNode:
                                                  )
             s.sendto(json.dumps(json_packet).encode('utf-8'), ('<broadcast>', self.broadcast_port))
         logging.info(f"{self.node_name} went offline.")
-        
+
     def broadcast_distance_vector(self):
         """
         Broadcast when distance vector changes
@@ -111,8 +111,8 @@ class NDNNode:
         """
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            json_packet = build_broadcast_packet(packet_type = 'routing', 
-                                                 name = self.node_name, 
+            json_packet = build_broadcast_packet(packet_type = 'routing',
+                                                 name = self.node_name,
                                                  data = {'port' : self.port,
                                                          'vector' : self.fib.get_distance_vector()},
                                                  api_version = API_VERSION
@@ -134,7 +134,7 @@ class NDNNode:
                 if peer_port != self.port:
                     if packet_type == 'discovery':
                         status = message['data']['status']
-                    
+
                         if status == "online":
                             if node_name not in self.fib:
                                 logging.debug(f"{self.node_name} received broadcast: discovered peer {node_name}")
@@ -145,14 +145,14 @@ class NDNNode:
                                 logging.debug(f"{self.node_name} updated distance vector: {self.fib.get_distance_vector()}")
                                 # Send distance vector updates to neighbours
                                 self.broadcast_distance_vector()
-                                            
+
                                 peer_public_key = serialization.load_pem_public_key(
                                     public_key_pem.encode('utf-8'),
                                     backend=default_backend()
                                 )
                                 shared_secret = self.ecc_manager.generate_shared_secret(peer_public_key)
                                 self.shared_secrets[node_name] = shared_secret
-                                
+
                         elif status == "offline":
                             logging.debug(f"{self.node_name} received broadcast: peer {node_name} went offline")
                             if node_name in self.fib:
@@ -162,7 +162,7 @@ class NDNNode:
                                 # Send distance vector updates to neighbours
                                 self.broadcast_distance_vector()
                                 del self.shared_secrets[node_name]
-                                
+
                     elif packet_type == 'routing':
                         logging.debug(f"{self.node_name} received broadcast: peer {node_name} updated distance vector")
                         if node_name in self.fib:
@@ -192,7 +192,7 @@ class NDNNode:
                                 packet['data'] = decrypted_data.decode('utf-8')
                             except Exception as e:
                                 logging.error(f"Error decrypting data: {e}")
-                                
+
                             if packet['type'] == 'interest':
                                 logging.debug(f"Received interest packet from {packet['sender']}")
                                 self.handle_interest(packet, packet['sender'], addr)
@@ -205,11 +205,10 @@ class NDNNode:
                             logging.warning("Received packet with unknown encryption.")
                 except ConnectionResetError:
                     pass
-                    #continue
 
     def handle_interest(self, interest_packet, requester, addr):
         name = interest_packet['name']
-        
+
         # Check if data name prefix is this node's name
         if name[:name.rindex('/')] == self.node_name:
             if name in self.data_names:
@@ -223,53 +222,53 @@ class NDNNode:
                 json_packet = build_packet('data', self.node_name, requester, name,
                                            f'No data {name} available')
                 self.send_packet(requester, json_packet)
-        
+
         # Else check Content Store
         elif name in self.cs:
             data = self.cs.get(name)
             json_packet = build_packet('data', self.node_name, requester, name, data)
             self.send_packet(requester, json_packet)
-            
-        # Else check if there is an entry in FIB. 
+
+        # Else check if there is an entry in FIB.
         # If so then forward, otherwise send NACK to requester
         else:
             addr_to_try = self.fib.get_routes(name)
-            
+
             if addr_to_try:
                 # Add interest to PIT
                 if name not in self.pit:
                     self.pit[name] = set([(requester, addr)])
                 else:
                     self.pit[name].add((requester, addr))
-                    
+
                 logging.debug(f"{self.node_name} added interest in {name} to PIT")
-                
+
                 success = False
                 for destination, dest_addr in addr_to_try:
                     json_packet = build_packet('interest', self.node_name, destination, name, '')
                     success = self.send_packet(destination, json_packet, dest_addr)
-                    
+
                     if success:
                         break
-                    
+
                 if not success:
                     json_packet = build_packet('data', self.node_name, requester, name,
                                                f'No data {name} available')
                     self.send_packet(requester, json_packet, addr)
-                    
+
             else:
                 json_packet = build_packet('data', self.node_name, requester, name,
                                            f'No data {name} available')
                 self.send_packet(requester, json_packet, addr)
-                
-                
+
+
     def create_send_intrest_packet(self, data_name, destination):
         # Add interest to PIT
         if data_name not in self.pit:
             self.pit[data_name] = set([(self.node_name, None)])
         else:
             self.pit[data_name].add((self.node_name, None))
-            
+
         json_packet = build_packet('interest', self.node_name, destination, data_name,'')
         # send interest to node according to fib
         self.send_packet(destination, json_packet)
@@ -279,9 +278,9 @@ class NDNNode:
         destination = data_packet['destination']
         data = str(data_packet['data'])
         #logging.debug(f"Recieved packet name: {name}, data: {data}")
-        
+
         if name in self.pit or destination == self.node_name:
-            
+
             # If this node is interested in the data or the intended recipient
             # then process the data
             if destination == self.node_name or self.node_name in self.pit[name]:
@@ -295,29 +294,29 @@ class NDNNode:
                         logging.info(f"Alert {name.split('/')[-1]} is set off.")
                 else:
                     logging.info(f"Received data {name}: {data}")
-                  
+
             # If there is pending interest, forward the data and remove entry from PIT
             if name in self.pit:
                 for requester, addr in self.pit[name]:
                     if requester != self.node_name:
                         logging.debug(f"Transmitting data packet from {data_packet['sender']} to {requester}")
                         self.send_packet(requester, data_packet, addr)
-                        
+
                 # Pending interests satisfied => remove from PIT
                 del self.pit[name]
 
             # Store in content store
             self.cs[name] = data
-                
 
-        
+
+
     def send_packet(self, peer_node_name, json_packet, addr=None):
         success = False
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
                 if addr == None:
                     addr = self.fib.peer_list[peer_node_name]
-                
+
                 s.connect(addr)
                 key = self.shared_secrets[peer_node_name]
                 encrypted_data = self.ecc_manager.encrypt_data(key, json_packet['data'].encode('utf-8'))
@@ -336,28 +335,12 @@ class NDNNode:
 
 
 def main():
-    #node_name = os.environ['NODE_NAME']
-    #port = int(os.environ['PORT'])
-    #broadcast_port = int(os.environ['BROADCAST_PORT'])
-    #sensor_type = os.environ['SENSOR_TYPE'].split(',')
-    
-    parser = argparse.ArgumentParser(description='Run a NDN node.')
-    parser.add_argument('--node-name', type=str, required=True, help='The node name.')
-    parser.add_argument('--sensor-type', type=str, help='The sensor name.')
-    parser.add_argument('--port', type=int, required=True, help='The port number to bind the node to.')
-    parser.add_argument('--broadcast-port', type=int, required=True, help='The port number to bind the node to.')
-    args = parser.parse_args()
-    node_name = args.node_name
-    port = args.port
-    broadcast_port = args.broadcast_port
-    
-    if args.sensor_type is None:
-        sensor_type = ''
-    else:
-        sensor_type = args.sensor_type
-    sensor_type = sensor_type.split(',')
+    node_name = os.environ['NODE_NAME']
+    port = int(os.environ['PORT'])
+    broadcast_port = int(os.environ['BROADCAST_PORT'])
+    sensor_type = os.environ['SENSOR_TYPE'].split(',')
 
-    node = NDNNode(node_name.replace('\r', ''), port, broadcast_port, sensor_type)
+    node = NDNNode(node_name, port, broadcast_port, sensor_type)
     node.start()
     try:
         while True:
