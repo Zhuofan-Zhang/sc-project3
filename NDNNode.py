@@ -10,10 +10,10 @@ from sensor import Sensor
 
 
 class NDNNode:
-    def __init__(self, house_name, room_name, device_name, port, broadcast_port, sensor_type):
+    def __init__(self, device_name, port, broadcast_port, sensor_type):
         self.host = '0.0.0.0'
         self.port = port
-        self.node_name = f"/{house_name}/{room_name}/{device_name}"
+        self.node_name = device_name
         self.broadcast_port = broadcast_port
         self.fib = {}  # Forwarding Information Base
         self.interest_fib = {}
@@ -30,6 +30,7 @@ class NDNNode:
         discovery_thread = threading.Thread(target=self.listen_for_peer_broadcasts)
         self.threads.extend([listener_thread, broadcast_thread, discovery_thread])
         for t in self.threads:
+            t.daemon = True
             t.start()
 
     def stop(self):

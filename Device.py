@@ -10,15 +10,14 @@ Device class
 import json
 import threading
 from NDNNode import NDNNode
-from Room import Room
 
 SENSOR_TYPES = ["temp", "humidity", "CO", "CO2", "motion", "light"]
 ACTUATOR_TYPES = ["heater", "ac", "humidifier", "smoke_alarm", "lights"]
 
 class Device:
-    def __init__(self, device_id, room: Room):
+    def __init__(self, room, device_id, listening_port, broadcast_port):
         self.device_id = device_id
-        self.node = NDNNode(self.device_id)
+        # self.node = NDNNode(self.device_id, listening_port, broadcast_port, SENSOR_TYPES)
         self._room = room
         self._triggers = {
             # trigger format: ('comparer', 'value', 'actuator' 'effect')
@@ -26,8 +25,8 @@ class Device:
                          (">", 26, "heater", "off"),
                          ("<", 19, "ac", "off"),
                          (">", 26, "ac", "on")],       
-            "humidity": [("<", 40, "humidifier", "on"),
-                         (">", 50, "humidifier", "off")], 
+            "humidity": [("<", 0.4, "humidifier", "on"),
+                         (">", 0.5, "humidifier", "off")], 
             "CO":       [("<", 40, "alarm", "off"),
                          (">", 75, "alarm", "on")],                  
             "CO2":      [("<", 40, "alarm", "off"),
@@ -40,9 +39,18 @@ class Device:
         self._on = False
 
     def _listen_for_data(self):
+        pass
         while self._on:
-            data = self.node.listen()
-            print(f"Received data: {data.decode('utf-8')}")
+            data = None # self.node.listen_for_command()
+            # print(f"Received data: {data.decode('utf-8')}")
+            if data is not None:
+                data_type, data_contents = data
+                if data_type == "command":
+                    if data_contents == "off":
+                        self.turn_off()
+                    else:
+                        (app, app_status) = data_contents
+                        self._room.apparatus[app].on = app_status
 
     def _run_sensors(self):
         while self._on:
@@ -51,13 +59,19 @@ class Device:
                 if reading != sensor.last_reading:
                     sensor.last_reading = reading
                     self._actuate(sensor.sensor_type, reading)
-                    self.node.emit(sensor.name, reading)
+                    if sensor.sensor_type == 'light':
+                        print(f"{self.device_id}/{sensor.sensor_type}: {reading}")
+                    # self.node.emit(sensor.name, reading)
 
     def _actuate(self, sensor_type, reading):
-        for (comparer, value, apparatus, effect) in self._triggers[sensor_type]:
-            compare_string = f"{reading} {comparer} {value}"
-            if eval(compare_string) and apparatus in self._room.apparatus:
-                self._room.apparatus[apparatus].on = (effect == "on")
+        if sensor_type in self._triggers:
+            for (comparer, value, apparatus, effect) in self._triggers[sensor_type]:
+                compare_string = f"{reading} {comparer} {value}"
+                if eval(compare_string) and apparatus in self._room.apparatus:
+                    if self._room.apparatus[apparatus].on != (effect == "on"):
+                        self._room.apparatus[apparatus].on = (effect == "on")
+                        print(f"{self.device_id}: turning {apparatus} {'on' if (effect == 'on') else 'off'}")
+                        # self.node.emit_actuation(sensor.name)
 
     def update_trigger(self, target, trigger):
         if target in self._triggers:
@@ -71,11 +85,11 @@ class Device:
         for _ , t in threads.items():
             t.daemon = True
             t.start()
-        self.node.start()
+        # self.node.start()
 
     def turn_off(self):
         self._on = False
-        self.node.broadcast_offline()
+        # self.node.broadcast_offline()
 
     """
     DeviceSensor class
@@ -93,5 +107,5 @@ class Device:
             self.sensor_type = sensor_type
             self.last_reading = None
 
-        def get_reading(self, room: Room):
+        def get_reading(self, room):
             return round(room.stats[self.sensor_type], 3)

@@ -3,14 +3,17 @@ Room class
 - Simulates 'natural changes' and changes due to turned on apparatus (like heaters, lights)
 - Gets initialised with one device, but more can be added if needed
 """
+import os
+import sys
 from random import uniform
 from time import sleep
 from Device import Device
 from Apparatus import Apparatus
 
 class Room:
-    def __init__(self, room_id):
-        self.device = Device(room_id+"device1", "localhost", 69, self)
+    def __init__(self, room_id, device_l_port, device_b_port):
+        self.room_id = room_id
+        self.device = Device(self, str(room_id)+"device", device_l_port, device_b_port)
         self.stats = {
             "temp": 20,         # Temp in degrees Celsius
             "humidity": 0.4,    # Humidity percentage as decimal
@@ -40,6 +43,9 @@ class Room:
                     self.stats[app.affected_stat] += app.change_amount
                 elif app.change_type == "decrease_by":
                     self.stats[app.affected_stat] -= app.change_amount
+                if app.on and app.affected_stat in self.stats.keys():
+                    if app.change_type == "set_to":
+                        self.stats[app.affected_stat] = 0
 
     def update_via_natural_changes(self):
         # Simulate temperature fluctuation within a realistic range
@@ -57,16 +63,10 @@ class Room:
         self.stats["CO2"] = min(max(self.stats["CO2"], 300), 1000)
         sleep(1)   
 
-    def toggle_value(self, value):
-        if value in ["motion", "heater", "light"]:
-            self.stats[value] = 1 if self.stats[value] == 0 else 0
-
     def set_apparatus(self, apparatus: Apparatus):
         self.apparatus[apparatus.apparatus_type] = apparatus
 
     def main(self):
         self.device.turn_on()
         self.simulate()
-            
-room = Room("room")
-room.main()
+        
