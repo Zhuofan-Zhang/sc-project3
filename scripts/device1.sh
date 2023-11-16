@@ -1,9 +1,7 @@
 #!/bin/bash
 
 # Set environment variables
-export HOUSE_NAME="house1"
-export ROOM_NAME="room1"
-export DEVICE_NAME="device1"
+export NODE_NAME='/house1/room1/device1'
 export PORT=33001
 export BROADCAST_PORT=33000
 export SENSOR_TYPE='light'

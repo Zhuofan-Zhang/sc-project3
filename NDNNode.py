@@ -106,37 +106,38 @@ class NDNNode:
                                 del self.shared_secrets[node_name]
                                 for sensor in sensor_types:
                                     del self.interest_fib[sensor]
-                                    print(f'Removed sensor {sensor}')
                                 print(f"Peer {node_name} went offline")
 
     def handle_connection(self, conn, addr):
         with conn:
             while self.running:
-                data = conn.recv(1024)
-                if data:
-                    packet = json.loads(data.decode())
-                    sender = packet['sender']
-                    if sender in self.shared_secrets:
-                        try:
-                            # 解密数据
-                            encrypted_data = base64.b64decode(packet['data'])
-                            key = self.shared_secrets[sender]
-                            decrypted_data = self.ecc_manager.decrypt_data(key, encrypted_data)
-                            packet['data'] = decrypted_data.decode('utf-8')
-                        except Exception as e:
-                            print(f"Error decrypting data: {e}")
-                            continue
-                    else:
-                        print("Received packet without encryption.")
-
-                    if packet['type'] == 'interest':
-                        print(f"Received interest packet from {packet['sender']}")
-                        self.handle_interest(packet, packet['sender'])
-                    elif packet['type'] == 'data':
-                        print(f"Received data packet from {packet['sender']}")
-                        self.handle_data(packet)
-                    else:
-                        print("Unknown data packet type.")
+                try:
+                    data = conn.recv(1024)
+                    if data:
+                        packet = json.loads(data.decode())
+                        sender = packet['sender']
+                        if sender in self.shared_secrets:
+                            try:
+                                # 解密数据
+                                encrypted_data = base64.b64decode(packet['data'])
+                                key = self.shared_secrets[sender]
+                                decrypted_data = self.ecc_manager.decrypt_data(key, encrypted_data)
+                                packet['data'] = decrypted_data.decode('utf-8')
+                            except Exception as e:
+                                print(f"Error decrypting data: {e}")
+                                continue
+                            if packet['type'] == 'interest':
+                                print(f"Received interest packet from {packet['sender']}")
+                                self.handle_interest(packet, packet['sender'])
+                            elif packet['type'] == 'data':
+                                print(f"Received data packet from {packet['sender']}")
+                                self.handle_data(packet)
+                            else:
+                                print("Unknown data packet type.")
+                        else:
+                            print("Received packet without encryption.")
+                except ConnectionResetError:
+                    continue
 
     def handle_interest(self, interest_packet, requester):
         name = interest_packet['name']
@@ -156,10 +157,10 @@ class NDNNode:
             else:
                 self.pit[name] = requester
                 print(f'added interest {name} with requester {requester}')
-                available_destinations = [key for key, value in self.fib.items() if
-                                          value == self.interest_fib[sensor_type]]
+                available_destinations = [value for key, value in self.fib.items() if key == sensor_type]
                 if len(available_destinations) > 0:
-                    destination = available_destinations.pop(0)
+                    destination = [key for key, value in self.fib.items() if
+                                   value == self.interest_fib[sensor_type]][0]
                     json_packet = build_packet('interest', self.node_name, destination, name, '')
                     self.send_packet(destination, json_packet)
                 else:
@@ -212,17 +213,20 @@ class NDNNode:
     def send_packet(self, peer_node_name, json_packet):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
-                peer = self.fib.get(peer_node_name)
-                s.connect(peer)
-                key = self.shared_secrets[peer_node_name]
-                encrypted_data = self.ecc_manager.encrypt_data(key, json_packet['data'].encode('utf-8'))
-                # 将加密后的字节串转换为Base64编码的字符串
-                json_packet['data'] = base64.b64encode(encrypted_data).decode('utf-8')
-                # packet = self.ecc_manager.encrypt_data(key, json.dumps(json_packet).encode('utf-8'))
-                packet = json.dumps(json_packet).encode('utf-8')
-                s.sendall(packet)
-                packet_type = json_packet['type']
-                print(f"Sent {packet_type} '{json_packet['name']}' to {json_packet['destination']}")
+                if peer_node_name in self.fib:
+                    peer = self.fib.get(peer_node_name)
+                    s.connect(peer)
+                    key = self.shared_secrets[peer_node_name]
+                    encrypted_data = self.ecc_manager.encrypt_data(key, json_packet['data'].encode('utf-8'))
+                    # 将加密后的字节串转换为Base64编码的字符串
+                    json_packet['data'] = base64.b64encode(encrypted_data).decode('utf-8')
+                    # packet = self.ecc_manager.encrypt_data(key, json.dumps(json_packet).encode('utf-8'))
+                    packet = json.dumps(json_packet).encode('utf-8')
+                    s.sendall(packet)
+                    packet_type = json_packet['type']
+                    print(f"Sent {packet_type} '{json_packet['name']}' to {json_packet['destination']}")
+                else:
+                    print(f"{peer_node_name.capitalize()} is not available.")
             except ConnectionRefusedError:
                 print(f"Failed to connect to {peer}")
 
