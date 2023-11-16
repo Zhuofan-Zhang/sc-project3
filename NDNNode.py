@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import re
@@ -5,7 +6,11 @@ import socket
 import threading
 import time
 
-from helper import build_packet, decode_command, is_alertable
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+
+from ECCManager import ECCManager
+from helper import build_packet, decode_command, is_alertable, decode_broadcast_packet, build_broadcast_packet
 from sensor import Sensor
 
 
@@ -20,6 +25,12 @@ class NDNNode:
         self.pit = {}  # Pending Interest Table
         self.cs = {}
         self.sensor_type = sensor_type
+        self.ecc_manager = ECCManager()
+        self.public_key_pem = self.ecc_manager.get_public_key().public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        ).decode('utf-8')
+        self.shared_secrets = {}
         self.threads = []
         self.running = threading.Event()
         self.running.set()
@@ -43,23 +54,25 @@ class NDNNode:
             s.listen()
             print(f"Node is listening on port {self.port}")
             while self.running:
+                s.getsockname()
                 conn, addr = s.accept()
                 threading.Thread(target=self.handle_connection, args=(conn, addr)).start()
 
     def broadcast_presence(self):
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+
             while self.running:
-                json_packet = build_packet('discovery', self.node_name, 'broadcast_node', 'online',
-                                           f"{self.port}:{','.join(self.sensor_type)}")
+                json_packet = build_broadcast_packet('discovery', 'online', self.node_name, self.port,
+                                                     self.public_key_pem, ','.join(self.sensor_type))
                 s.sendto(json.dumps(json_packet).encode('utf-8'), ('<broadcast>', self.broadcast_port))
                 time.sleep(1)
 
     def broadcast_offline(self):
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            json_packet = build_packet('discovery', self.node_name, 'broadcast_node', 'offline',
-                                       f"{self.port}:{','.join(self.sensor_type)}")
+            json_packet = build_broadcast_packet('discovery', 'offline', self.node_name, self.port, self.public_key_pem,
+                                                 ','.join(self.sensor_type))
             s.sendto(json.dumps(json_packet).encode('utf-8'), ('<broadcast>', self.broadcast_port))
         print('offline')
 
@@ -70,21 +83,27 @@ class NDNNode:
             while self.running:
                 data, addr = s.recvfrom(1024)
                 message = json.loads(data.decode())
-                if message['type'] == 'discovery':
-                    status, node_name, port, sensor_types = message['name'], message['sender'], message['data'].split(
-                        ':').pop(0), message['data'].split(':').pop(1).split(',')
-                    peer_port = int(port)
+                packet_type, status, node_name, peer_port, public_key_pem, sensor_types = decode_broadcast_packet(
+                    message)
+                if packet_type == 'discovery':
                     if peer_port != self.port:
                         if status == "online":
                             peer = (addr[0], peer_port)
                             if node_name not in self.fib:
                                 print(f"Discovered peer {node_name}")
                                 self.fib[node_name] = peer
+                                peer_public_key = serialization.load_pem_public_key(
+                                    public_key_pem.encode('utf-8'),
+                                    backend=default_backend()
+                                )
+                                shared_secret = self.ecc_manager.generate_shared_secret(peer_public_key)
+                                self.shared_secrets[node_name] = shared_secret
                                 for sensor in sensor_types:
                                     self.interest_fib[sensor] = peer
                         elif status == "offline":
                             if node_name in self.fib:
                                 del self.fib[node_name]
+                                del self.shared_secrets[node_name]
                                 for sensor in sensor_types:
                                     del self.interest_fib[sensor]
                                     print(f'Removed sensor {sensor}')
@@ -94,15 +113,30 @@ class NDNNode:
         with conn:
             while self.running:
                 data = conn.recv(1024)
-                if not data:
-                    break
-                packet = json.loads(data.decode())
-                if packet['type'] == 'interest':
-                    print(f"Received interest packet from {packet['sender']}")
-                    self.handle_interest(packet, packet['sender'])
-                elif packet['type'] == 'data':
-                    print(f"Received data packet from {packet['sender']}")
-                    self.handle_data(packet)
+                if data:
+                    packet = json.loads(data.decode())
+                    sender = packet['sender']
+                    if sender in self.shared_secrets:
+                        try:
+                            # 解密数据
+                            encrypted_data = base64.b64decode(packet['data'])
+                            key = self.shared_secrets[sender]
+                            decrypted_data = self.ecc_manager.decrypt_data(key, encrypted_data)
+                            packet['data'] = decrypted_data.decode('utf-8')
+                        except Exception as e:
+                            print(f"Error decrypting data: {e}")
+                            continue
+                    else:
+                        print("Received packet without encryption.")
+
+                    if packet['type'] == 'interest':
+                        print(f"Received interest packet from {packet['sender']}")
+                        self.handle_interest(packet, packet['sender'])
+                    elif packet['type'] == 'data':
+                        print(f"Received data packet from {packet['sender']}")
+                        self.handle_data(packet)
+                    else:
+                        print("Unknown data packet type.")
 
     def handle_interest(self, interest_packet, requester):
         name = interest_packet['name']
@@ -110,40 +144,52 @@ class NDNNode:
         if name in self.cs:
             data = self.cs.get(name)
             json_packet = build_packet('data', self.node_name, requester, name, data)
-            self.send_packet(self.fib.get(requester), json_packet)
+            self.send_packet(requester, json_packet)
         else:
             # Add to Interest Table and forward based on FIB
-            sensor_type = interest_packet['name'].split('/').pop(4)
+            sensor_type = interest_packet['name'].split('/').pop()
             if sensor_type in self.sensor_type:
-                data = Sensor.generators.get(sensor_type, lambda: None)()
+                data = str(Sensor.generators.get(sensor_type, lambda: None)())
                 # print(f'Generated {name} for requester {requester}')
                 json_packet = build_packet('data', self.node_name, requester, name, data)
-                self.send_packet(self.fib.get(requester), json_packet)
+                self.send_packet(requester, json_packet)
             else:
                 self.pit[name] = requester
                 print(f'added interest {name} with requester {requester}')
-                destination = [key for key, value in self.fib.items() if value == self.interest_fib[sensor_type]].pop(0)
-                json_packet = build_packet('interest', self.node_name, destination, name, '')
-                self.send_packet(self.fib.get(destination), json_packet)
+                available_destinations = [key for key, value in self.fib.items() if
+                                          value == self.interest_fib[sensor_type]]
+                if len(available_destinations) > 0:
+                    destination = available_destinations.pop(0)
+                    json_packet = build_packet('interest', self.node_name, destination, name, '')
+                    self.send_packet(destination, json_packet)
+                else:
+                    json_packet = build_packet('data', self.node_name, requester, name,
+                                               f'no sensor {sensor_type} available')
+                    self.send_packet(requester, json_packet)
 
     def handle_data(self, data_packet):
         name = data_packet['name']
         data = str(data_packet['data'])
         if re.compile(r'command').search(data):
-            actuator, command = decode_command(name, data)
-            print(f'{actuator.capitalize()} is turned {command}.')
+            sensor_type = data_packet['name'].split('/').pop()
+            if sensor_type in self.sensor_type:
+                actuator, command = decode_command(name, data)
+                print(f'{actuator.capitalize()} is turned {command}.')
+            else:
+                destination = [key for key, value in self.fib.items() if value == self.interest_fib[sensor_type]].pop(0)
+                self.send_packet(destination, data_packet)
         elif re.compile(r'alert').search(data):
             if self.node_name.__contains__('phone'):
                 print(f"Alert {name.split('/')[-1]} is set off.")
             else:
                 destination = [key for key in self.fib.keys() if key.__contains__('phone')]
-                self.send_packet(self.fib.get(destination.pop()), data_packet)
+                self.send_packet(destination.pop(), data_packet)
         elif name in self.pit:
             destination = self.pit.get(name)
             print(f"Transmitting data packet from {data_packet['sender']} to {destination}")
             data_packet['sender'] = self.node_name
             data_packet['destination'] = destination
-            self.send_packet(self.fib.get(destination), data_packet)
+            self.send_packet(destination, data_packet)
         else:
             self.cs[name] = data
             alert = is_alertable(name, data)
@@ -157,16 +203,22 @@ class NDNNode:
                         data_packet['data'] = 'alert'
                         print(f"Alerting {destinations}.")
                         for phone in destinations:
-                            self.send_packet(self.fib.get(phone), data_packet)
+                            self.send_packet(phone, data_packet)
                     else:
                         print("Alert is discarded.")
             else:
                 print(f"Received {data_packet}")
 
-    def send_packet(self, peer, json_packet):
+    def send_packet(self, peer_node_name, json_packet):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
+                peer = self.fib.get(peer_node_name)
                 s.connect(peer)
+                key = self.shared_secrets[peer_node_name]
+                encrypted_data = self.ecc_manager.encrypt_data(key, json_packet['data'].encode('utf-8'))
+                # 将加密后的字节串转换为Base64编码的字符串
+                json_packet['data'] = base64.b64encode(encrypted_data).decode('utf-8')
+                # packet = self.ecc_manager.encrypt_data(key, json.dumps(json_packet).encode('utf-8'))
                 packet = json.dumps(json_packet).encode('utf-8')
                 s.sendall(packet)
                 packet_type = json_packet['type']
@@ -176,12 +228,6 @@ class NDNNode:
 
 
 def main():
-    # parser = argparse.ArgumentParser(description='Run a NDN node.')
-    # parser.add_argument('--id', required=True, help='The port number to bind the node to.')
-    # parser.add_argument('--port', type=int, required=True, help='The port number to bind the node to.')
-    # parser.add_argument('--broadcast_port', type=int, required=True, help='The port number to bind the node to.')
-    # args = parser.parse_args()
-
     node_name = os.environ['NODE_NAME']
     port = int(os.environ['PORT'])
     broadcast_port = int(os.environ['BROADCAST_PORT'])
@@ -198,7 +244,7 @@ def main():
                 json_packet = build_packet('interest', node.node_name, destination, f'{node.node_name}/{sensor_name}',
                                            '')
                 # send interest to node according to fib
-                node.send_packet(node.fib.get(destination), json_packet)
+                node.send_packet(destination, json_packet)
             elif command == 'data':
                 destination = input('Enter destination node for data packet: ').strip()
                 sensor_name = input('Enter sensor name: ').strip()
@@ -206,7 +252,7 @@ def main():
                 json_packet = build_packet('data', node.node_name, destination, f'{destination}/{sensor_name}',
                                            data_content)
                 # send data to node with the same data name
-                node.send_packet(node.fib.get(destination), json_packet)
+                node.send_packet(destination, json_packet)
             elif command == 'exit':
                 node.stop()
             else:
