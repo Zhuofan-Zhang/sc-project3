@@ -118,7 +118,7 @@ class NDNNode:
                         sender = packet['sender']
                         if sender in self.shared_secrets:
                             try:
-                                # 解密数据
+                                # Decrypt data
                                 encrypted_data = base64.b64decode(packet['data'])
                                 key = self.shared_secrets[sender]
                                 decrypted_data = self.ecc_manager.decrypt_data(key, encrypted_data)
@@ -218,9 +218,7 @@ class NDNNode:
                     s.connect(peer)
                     key = self.shared_secrets[peer_node_name]
                     encrypted_data = self.ecc_manager.encrypt_data(key, json_packet['data'].encode('utf-8'))
-                    # 将加密后的字节串转换为Base64编码的字符串
                     json_packet['data'] = base64.b64encode(encrypted_data).decode('utf-8')
-                    # packet = self.ecc_manager.encrypt_data(key, json.dumps(json_packet).encode('utf-8'))
                     packet = json.dumps(json_packet).encode('utf-8')
                     s.sendall(packet)
                     packet_type = json_packet['type']
