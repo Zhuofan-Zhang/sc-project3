@@ -15,18 +15,32 @@ def build_packet(packet_type, sender, destination, name, data):
                    'data': data}
     return json_packet
 
-
-def build_broadcast_packet(packet_type, status, node_name, peer_port, public_key_pem, sensor_type):
+def build_broadcast_packet(packet_type, name, data, api_version):
+    current_time_utc = datetime.now(timezone.utc)
+    time_stamp = current_time_utc.isoformat()
+    
     json_packet = {'type': packet_type,
-                   'version': API_VERSION,
-                   'status': status,
-                   'node_name': node_name,
-                   'peer_port': peer_port,
-                   'public_key_pem': public_key_pem,
-                   'sensor_types': sensor_type
-
-                   }
+                   'version': api_version,
+                   #'sender': sender,
+                   #'destination': destination,
+                   'timestamp': time_stamp,
+                   'name': name,
+                   'data': data}
+    
     return json_packet
+
+
+#def build_broadcast_packet(packet_type, status, node_name, peer_port, public_key_pem, sensor_type):
+#    json_packet = {'type': packet_type,
+#                   'version': API_VERSION,
+#                   'status': status,
+#                   'node_name': node_name,
+#                   'peer_port': peer_port,
+#                   'public_key_pem': public_key_pem,
+#                   'sensor_types': sensor_type
+#
+#                   }
+#    return json_packet
 
 
 def decode_broadcast_packet(packet):
