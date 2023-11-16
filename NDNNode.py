@@ -364,7 +364,7 @@ def main():
     #broadcast_port = args.broadcast_port #int(os.environ['BROADCAST_PORT'])
     #sensor_type = ['light'] #os.environ['SENSOR_TYPE'].split(',')
 
-    node = NDNNode(node_name, port, broadcast_port, sensor_type)
+    node = NDNNode(node_name.replace('\r', ''), port, broadcast_port, sensor_type)
     node.start()
     try:
         while True:
