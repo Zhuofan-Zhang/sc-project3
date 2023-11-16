@@ -20,6 +20,10 @@ API_VERSION = 'v2'
 
 class NDNNode:
     def __init__(self, node_name, port, broadcast_port, sensor_type):
+        
+        # Logging verbosity
+        logging.basicConfig(format="%(asctime)s.%(msecs)04d [%(levelname)s] %(message)s", level=logging.DEBUG, datefmt="%H:%M:%S:%m")
+        
         self.host = '0.0.0.0'
         self.port = port
         self.node_name = node_name
@@ -29,6 +33,13 @@ class NDNNode:
         self.pit = {}  # Pending Interest Table
         self.cs = {}
         self.sensor_type = sensor_type
+        
+        # Create list of data name as <node_name>/<sensor_name>
+        if not node_name.endswith('/'):
+            node_name += '/'
+        self.data_names = [node_name+s for s in sensor_type]
+        logging.info(f"{self.node_name} is the source for: {self.data_names}")
+        
         self.ecc_manager = ECCManager()
         self.public_key_pem = self.ecc_manager.get_public_key().public_bytes(
             encoding=serialization.Encoding.PEM,
@@ -39,8 +50,7 @@ class NDNNode:
         self.running = threading.Event()
         self.running.set()
         
-        # Logging verbosity
-        logging.basicConfig(format="%(asctime)s.%(msecs)04d [%(levelname)s] %(message)s", level=logging.DEBUG, datefmt="%H:%M:%S:%m")
+        
 
     def start(self):
         listener_thread = threading.Thread(target=self.listen_for_connections)
@@ -185,9 +195,45 @@ class NDNNode:
                                 # Send distance vector updates to neighbours
                                 self.broadcast_distance_vector()
 
+#    def handle_connection(self, conn, addr):
+#        with conn:
+#            while self.running:
+#                try:
+#                    data = conn.recv(1024)
+#                    if data:
+#                        packet = json.loads(data.decode())
+#                        sender = packet['sender']
+#                        if sender in self.shared_secrets:
+#                            try:
+#                                # 解密数据
+#                                encrypted_data = base64.b64decode(packet['data'])
+#                                key = self.shared_secrets[sender]
+#                                decrypted_data = self.ecc_manager.decrypt_data(key, encrypted_data)
+#                                packet['data'] = decrypted_data.decode('utf-8')
+#                            except Exception as e:
+#                                # TODO: logging.debug()
+#                                print(f"Error decrypting data: {e}")
+#                                continue
+#                            if packet['type'] == 'interest':
+#                                # TODO: logging.debug()
+#                                print(f"Received interest packet from {packet['sender']}")
+#                                self.handle_interest(packet, packet['sender'])
+#                            elif packet['type'] == 'data':
+#                                # TODO: logging.debug()
+#                                print(f"Received data packet from {packet['sender']}")
+#                                self.handle_data(packet)
+#                            else:
+#                                # TODO: logging.debug()
+#                                print("Unknown data packet type.")
+#                        else:
+#                            # TODO: logging.debug()
+#                            print("Received packet without encryption.")
+#                except ConnectionResetError:
+#                    continue
+
     def handle_connection(self, conn, addr):
         with conn:
-            while self.running:
+            #while self.running:
                 try:
                     data = conn.recv(1024)
                     if data:
@@ -203,7 +249,7 @@ class NDNNode:
                             except Exception as e:
                                 # TODO: logging.debug()
                                 print(f"Error decrypting data: {e}")
-                                continue
+                                #continue
                             if packet['type'] == 'interest':
                                 # TODO: logging.debug()
                                 print(f"Received interest packet from {packet['sender']}")
@@ -219,7 +265,8 @@ class NDNNode:
                             # TODO: logging.debug()
                             print("Received packet without encryption.")
                 except ConnectionResetError:
-                    continue
+                    pass
+                    #continue
 
     def handle_interest(self, interest_packet, requester):
         name = interest_packet['name']
@@ -228,8 +275,13 @@ class NDNNode:
             data = self.cs.get(name)
             json_packet = build_packet('data', self.node_name, requester, name, data)
             self.send_packet(requester, json_packet)
+            
+        # Else if this node is the data source, generate the data
+        
+        
+        # Else add  Pending Interest Table and forward based on FIB
         else:
-            # Add to Interest Table and forward based on FIB
+            
             sensor_type = interest_packet['name'].split('/').pop()
             if sensor_type in self.sensor_type:
                 data = str(Sensor.generators.get(sensor_type, lambda: None)())
@@ -250,6 +302,36 @@ class NDNNode:
                     json_packet = build_packet('data', self.node_name, requester, name,
                                                f'no sensor {sensor_type} available')
                     self.send_packet(requester, json_packet)
+                    
+#    def handle_interest(self, interest_packet, requester):
+#        name = interest_packet['name']
+#        # Check Content Store first
+#        if name in self.cs:
+#            data = self.cs.get(name)
+#            json_packet = build_packet('data', self.node_name, requester, name, data)
+#            self.send_packet(requester, json_packet)
+#        else:
+#            # Add to Interest Table and forward based on FIB
+#            sensor_type = interest_packet['name'].split('/').pop()
+#            if sensor_type in self.sensor_type:
+#                data = str(Sensor.generators.get(sensor_type, lambda: None)())
+#                # print(f'Generated {name} for requester {requester}')
+#                json_packet = build_packet('data', self.node_name, requester, name, data)
+#                self.send_packet(requester, json_packet)
+#            else:
+#                self.pit[name] = requester
+#                # TODO: logging.debug()
+#                print(f'added interest {name} with requester {requester}')
+#                available_destinations = [value for key, value in self.fib.items() if key == sensor_type]
+#                if len(available_destinations) > 0:
+#                    destination = [key for key, value in self.fib.items() if
+#                                   value == self.interest_fib[sensor_type]][0]
+#                    json_packet = build_packet('interest', self.node_name, destination, name, '')
+#                    self.send_packet(destination, json_packet)
+#                else:
+#                    json_packet = build_packet('data', self.node_name, requester, name,
+#                                               f'no sensor {sensor_type} available')
+#                    self.send_packet(requester, json_packet)
 
     def handle_data(self, data_packet):
         name = data_packet['name']
@@ -317,8 +399,11 @@ class NDNNode:
                         packet_type = json_packet['type']
                         # TODO: logging.debug()
                         print(f"Sent {packet_type} '{json_packet['name']}' to {json_packet['destination']}")
+                        break
                     except ConnectionRefusedError:
                         print(f"Failed to connect to {peer}")
+                    except Exception as err:
+                        print(f"Error in send_packet() to {peer} {err}")
             else:
                 # TODO: logging.debug()
                 print(f"{peer_node_name.capitalize()} is not in FIB.")
@@ -354,7 +439,7 @@ def main():
     
     #parser = argparse.ArgumentParser(description='Run a NDN node.')
     #parser.add_argument('--node-name', type=str, required=True, help='The node name.')
-    #parser.add_argument('--sensor-name', type=str, required=True, help='The sensor name.')
+    #parser.add_argument('--sensor-type', type=str, help='The sensor name.')
     #parser.add_argument('--get', type=str, required=True, help='The data name to get.')
     #parser.add_argument('--port', type=int, required=True, help='The port number to bind the node to.')
     #parser.add_argument('--broadcast-port', type=int, required=True, help='The port number to bind the node to.')
@@ -362,7 +447,12 @@ def main():
     #node_name = args.node_name
     #port = args.port
     #broadcast_port = args.broadcast_port #int(os.environ['BROADCAST_PORT'])
-    #sensor_type = ['light'] #os.environ['SENSOR_TYPE'].split(',')
+    
+    #if args.sensor_type is None:
+    #    sensor_type = ''
+    #else:
+    #    sensor_type = args.sensor_type
+    #sensor_type = sensor_type.split(',')
 
     node = NDNNode(node_name.replace('\r', ''), port, broadcast_port, sensor_type)
     node.start()
@@ -375,6 +465,7 @@ def main():
                 json_packet = build_packet('interest', node.node_name, destination, f'{node.node_name}/{sensor_name}',
                                            '')
                 # send interest to node according to fib
+                logging.debug("call send packet from main loop")
                 node.send_packet(destination, json_packet)
             elif command == 'data':
                 destination = input('Enter destination node for data packet: ').strip()
@@ -383,6 +474,7 @@ def main():
                 json_packet = build_packet('data', node.node_name, destination, f'{destination}/{sensor_name}',
                                            data_content)
                 # send data to node with the same data name
+                logging.debug("call send packet from main loop")
                 node.send_packet(destination, json_packet)
             elif command == 'exit':
                 node.stop()
