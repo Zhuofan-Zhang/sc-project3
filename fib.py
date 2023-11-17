@@ -143,13 +143,17 @@ class ForwardingInfoBase:
             prefix = '/'.join(split[:len(split)-i])
             if not prefix.endswith('/'):
                 prefix += '/'
+                
+            # Otherwise would select all the nodes starting with '/' as addresses to try
+            if prefix == '/':
+                break
         
             # Sort in ascending order by number of hops
             for index, value in dist_nbr[dist_nbr_fmt.index.str.startswith(prefix)].sort_values().items():
                 # Get from peer list and add to results list
                 addr = peer_list_cpy.pop(index, None)
                 if addr is not None:
-                    addr_to_try.append(addr)
+                    addr_to_try.append((index, addr))
                 if not peer_list_cpy:
                     break
                     
