@@ -1,28 +1,29 @@
 import base64
 import json
+import logging
 import os
 import re
 import socket
 import threading
 import time
-import logging
-import fib
-import argparse
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 
+import fib
 from ECCManager import ECCManager
-from helper import build_packet,  build_broadcast_packet, decode_command
+from helper import build_packet, build_broadcast_packet, decode_command
 from sensor import Sensor
 
 API_VERSION = 'v2'
+
 
 class NDNNode:
     def __init__(self, node_name, port, broadcast_port, sensor_type):
 
         # Logging verbosity
-        logging.basicConfig(format="%(asctime)s.%(msecs)04d [%(levelname)s] %(message)s", level=logging.DEBUG, datefmt="%H:%M:%S:%m")
+        logging.basicConfig(format="%(asctime)s.%(msecs)04d [%(levelname)s] %(message)s", level=logging.DEBUG,
+                            datefmt="%H:%M:%S:%m")
 
         self.host = '0.0.0.0'
         self.port = port
@@ -36,7 +37,7 @@ class NDNNode:
         # Create list of data name as <node_name>/<sensor_name>
         if not node_name.endswith('/'):
             node_name += '/'
-        self.data_names = [node_name+s for s in sensor_type]
+        self.data_names = [node_name + s for s in sensor_type]
         logging.info(f"{self.node_name} is the source for: {self.data_names}")
 
         self.ecc_manager = ECCManager()
@@ -48,8 +49,6 @@ class NDNNode:
         self.threads = []
         self.running = threading.Event()
         self.running.set()
-
-
 
     def start(self):
         listener_thread = threading.Thread(target=self.listen_for_connections)
@@ -80,13 +79,13 @@ class NDNNode:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 
             while self.running:
-                json_packet = build_broadcast_packet(packet_type = 'discovery',
-                                                     name = self.node_name,
-                                                     data = {'port' : self.port,
-                                                             'status' : 'online',
-                                                             'pub_key' : self.public_key_pem,
-                                                             'sensor_types' : ','.join(self.sensor_type)},
-                                                     api_version = API_VERSION
+                json_packet = build_broadcast_packet(packet_type='discovery',
+                                                     name=self.node_name,
+                                                     data={'port': self.port,
+                                                           'status': 'online',
+                                                           'pub_key': self.public_key_pem,
+                                                           'sensor_types': ','.join(self.sensor_type)},
+                                                     api_version=API_VERSION
                                                      )
                 s.sendto(json.dumps(json_packet).encode('utf-8'), ('<broadcast>', self.broadcast_port))
                 time.sleep(1)
@@ -94,13 +93,13 @@ class NDNNode:
     def broadcast_offline(self):
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            json_packet = build_broadcast_packet(packet_type = 'discovery',
-                                                 name = self.node_name,
-                                                 data = {'port' : self.port,
-                                                         'status' : 'offline',
-                                                         'pub_key' : self.public_key_pem,
-                                                         'sensor_types' : ','.join(self.sensor_type)},
-                                                 api_version = API_VERSION
+            json_packet = build_broadcast_packet(packet_type='discovery',
+                                                 name=self.node_name,
+                                                 data={'port': self.port,
+                                                       'status': 'offline',
+                                                       'pub_key': self.public_key_pem,
+                                                       'sensor_types': ','.join(self.sensor_type)},
+                                                 api_version=API_VERSION
                                                  )
             s.sendto(json.dumps(json_packet).encode('utf-8'), ('<broadcast>', self.broadcast_port))
         logging.info(f"{self.node_name} went offline.")
@@ -112,11 +111,11 @@ class NDNNode:
         """
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            json_packet = build_broadcast_packet(packet_type = 'routing',
-                                                 name = self.node_name,
-                                                 data = {'port' : self.port,
-                                                         'vector' : self.fib.get_distance_vector()},
-                                                 api_version = API_VERSION
+            json_packet = build_broadcast_packet(packet_type='routing',
+                                                 name=self.node_name,
+                                                 data={'port': self.port,
+                                                       'vector': self.fib.get_distance_vector()},
+                                                 api_version=API_VERSION
                                                  )
             logging.debug(f"{self.node_name} broadcasting distance vector on port {self.broadcast_port}")
             s.sendto(json.dumps(json_packet).encode('utf-8'), ('<broadcast>', self.broadcast_port))
@@ -144,7 +143,8 @@ class NDNNode:
                                 peer_addr = (addr[0], peer_port)
                                 logging.debug(f"{self.node_name} adding peer {node_name} on {peer_addr} to FIB")
                                 self.fib.add_entry(node_name, peer_addr)
-                                logging.debug(f"{self.node_name} updated distance vector: {self.fib.get_distance_vector()}")
+                                logging.debug(
+                                    f"{self.node_name} updated distance vector: {self.fib.get_distance_vector()}")
                                 # Send distance vector updates to neighbours
                                 self.broadcast_distance_vector()
 
@@ -160,7 +160,8 @@ class NDNNode:
                             if node_name in self.fib:
                                 logging.debug(f"{self.node_name} removing peer {node_name} from FIB")
                                 self.fib.remove_entry(node_name)
-                                logging.debug(f"{self.node_name} updated distance vector: {self.fib.get_distance_vector()}")
+                                logging.debug(
+                                    f"{self.node_name} updated distance vector: {self.fib.get_distance_vector()}")
                                 # Send distance vector updates to neighbours
                                 self.broadcast_distance_vector()
                                 del self.shared_secrets[node_name]
@@ -176,37 +177,35 @@ class NDNNode:
                                 # Send distance vector updates to neighbours
                                 self.broadcast_distance_vector()
 
-
-
     def handle_connection(self, conn, addr):
         with conn:
-                try:
-                    data = conn.recv(1024)
-                    if data:
-                        packet = json.loads(data.decode())
-                        sender = packet['sender']
-                        if sender in self.shared_secrets:
-                            try:
-                                # Decrypt data
-                                encrypted_data = base64.b64decode(packet['data'])
-                                key = self.shared_secrets[sender]
-                                decrypted_data = self.ecc_manager.decrypt_data(key, encrypted_data)
-                                packet['data'] = decrypted_data.decode('utf-8')
-                            except Exception as e:
-                                logging.error(f"Error decrypting data: {e}")
+            try:
+                data = conn.recv(1024)
+                if data:
+                    packet = json.loads(data.decode())
+                    sender = packet['sender']
+                    if sender in self.shared_secrets:
+                        try:
+                            # Decrypt data
+                            encrypted_data = base64.b64decode(packet['data'])
+                            key = self.shared_secrets[sender]
+                            decrypted_data = self.ecc_manager.decrypt_data(key, encrypted_data)
+                            packet['data'] = decrypted_data.decode('utf-8')
+                        except Exception as e:
+                            logging.error(f"Error decrypting data: {e}")
 
-                            if packet['type'] == 'interest':
-                                logging.debug(f"Received interest packet from {packet['sender']}")
-                                self.handle_interest(packet, packet['sender'], addr)
-                            elif packet['type'] == 'data':
-                                logging.debug(f"Received data packet from {packet['sender']}")
-                                self.handle_data(packet)
-                            else:
-                                logging.warning("Unknown packet type from {sender}. Discarding packet")
+                        if packet['type'] == 'interest':
+                            logging.debug(f"Received interest packet from {packet['sender']}")
+                            self.handle_interest(packet, packet['sender'], addr)
+                        elif packet['type'] == 'data':
+                            logging.debug(f"Received data packet from {packet['sender']}")
+                            self.handle_data(packet)
                         else:
-                            logging.warning("Received packet with unknown encryption.")
-                except ConnectionResetError:
-                    pass
+                            logging.warning("Unknown packet type from {sender}. Discarding packet")
+                    else:
+                        logging.warning("Received packet with unknown encryption.")
+            except ConnectionResetError:
+                pass
 
     def handle_interest(self, interest_packet, requester, addr):
         name = interest_packet['name']
@@ -215,7 +214,7 @@ class NDNNode:
         if name[:name.rindex('/')] == self.node_name:
             if name in self.data_names:
                 # Generate data if this is the source
-                sensor = name[name.rindex('/')+1:]
+                sensor = name[name.rindex('/') + 1:]
                 data = str(Sensor.generators.get(sensor, lambda: None)())
                 logging.info(f'Generated {name} for requester {requester}')
                 json_packet = build_packet('data', self.node_name, requester, name, data)
@@ -263,7 +262,6 @@ class NDNNode:
                                            f'No data {name} available')
                 self.send_packet(requester, json_packet, addr)
 
-
     def create_send_intrest_packet(self, data_name, destination):
         # Add interest to PIT
         if data_name not in self.pit:
@@ -271,7 +269,7 @@ class NDNNode:
         else:
             self.pit[data_name].add((self.node_name, None))
 
-        json_packet = build_packet('interest', self.node_name, destination, data_name,'')
+        json_packet = build_packet('interest', self.node_name, destination, data_name, '')
         # send interest to node according to fib
         self.send_packet(destination, json_packet)
 
@@ -279,7 +277,7 @@ class NDNNode:
         name = data_packet['name']
         destination = data_packet['destination']
         data = str(data_packet['data'])
-        #logging.debug(f"Recieved packet name: {name}, data: {data}")
+        # logging.debug(f"Recieved packet name: {name}, data: {data}")
 
         if name in self.pit or destination == self.node_name:
 
@@ -309,8 +307,7 @@ class NDNNode:
 
             # Store in content store
             self.cs[name] = data
-
-
+        logging.info(f"Received stray data packet {data_packet}")
 
     def send_packet(self, peer_node_name, json_packet, addr=None):
         success = False
@@ -322,7 +319,7 @@ class NDNNode:
                 s.connect(addr)
                 key = self.shared_secrets[peer_node_name]
                 encrypted_data = self.ecc_manager.encrypt_data(key, json_packet['data'].encode('utf-8'))
-                #logging.debug(f"Encrypting data {json_packet['data']}")
+                # logging.debug(f"Encrypting data {json_packet['data']}")
                 # Convert encrypted byte string to Base64 encoded string
                 json_packet['data'] = base64.b64encode(encrypted_data).decode('utf-8')
                 # packet = self.ecc_manager.encrypt_data(key, json.dumps(json_packet).encode('utf-8'))
