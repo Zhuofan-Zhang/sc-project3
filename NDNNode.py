@@ -306,7 +306,8 @@ class NDNNode:
 
             # Store in content store
             self.cs[name] = data
-        logging.info(f"Received stray data packet {data_packet}")
+        else:
+            logging.info(f"Received stray data packet {data_packet}")
 
     def send_packet(self, peer_node_name, json_packet, addr=None):
         success = False
