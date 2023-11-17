@@ -253,7 +253,7 @@ class NDNNode:
                             if packet['type'] == 'interest':
                                 # TODO: logging.debug()
                                 print(f"Received interest packet from {packet['sender']}")
-                                self.handle_interest(packet, packet['sender'])
+                                self.handle_interest(packet, packet['sender'], addr)
                             elif packet['type'] == 'data':
                                 # TODO: logging.debug()
                                 print(f"Received data packet from {packet['sender']}")
@@ -268,40 +268,63 @@ class NDNNode:
                     pass
                     #continue
 
-    def handle_interest(self, interest_packet, requester):
+    def handle_interest(self, interest_packet, requester, addr):
         name = interest_packet['name']
-        # Check Content Store first
-        if name in self.cs:
+        
+        # Check if data name prefix is this node's name
+        if name[:name.rindex('/')] == self.node_name:
+            if name in self.data_names:
+                # Generate data if this is the source
+                sensor = name[name.rindex('/')+1:]
+                data = str(Sensor.generators.get(sensor, lambda: None)())
+                print(f'Generated {name} for requester {requester}')
+                json_packet = build_packet('data', self.node_name, requester, name, data)
+                self.send_packet(requester, json_packet)
+            else:
+                json_packet = build_packet('data', self.node_name, requester, name,
+                                           f'No data {name} available')
+                self.send_packet(requester, json_packet)
+        
+        # Else check Content Store
+        elif name in self.cs:
             data = self.cs.get(name)
             json_packet = build_packet('data', self.node_name, requester, name, data)
             self.send_packet(requester, json_packet)
             
-        # Else if this node is the data source, generate the data
-        
-        
-        # Else add  Pending Interest Table and forward based on FIB
+        # Else check if there is an entry in FIB. 
+        # If so then forward, otherwise send NACK to requester
         else:
+            addr_to_try = self.fib.get_routes(name)
             
-            sensor_type = interest_packet['name'].split('/').pop()
-            if sensor_type in self.sensor_type:
-                data = str(Sensor.generators.get(sensor_type, lambda: None)())
-                # print(f'Generated {name} for requester {requester}')
-                json_packet = build_packet('data', self.node_name, requester, name, data)
-                self.send_packet(requester, json_packet)
-            else:
-                self.pit[name] = requester
-                # TODO: logging.debug()
-                print(f'added interest {name} with requester {requester}')
-                available_destinations = [value for key, value in self.fib.items() if key == sensor_type]
-                if len(available_destinations) > 0:
-                    destination = [key for key, value in self.fib.items() if
-                                   value == self.interest_fib[sensor_type]][0]
-                    json_packet = build_packet('interest', self.node_name, destination, name, '')
-                    self.send_packet(destination, json_packet)
+            if addr_to_try:
+                # Add interest to PIT
+                if name not in self.pit:
+                    self.pit[name] = set([(requester, addr)])
                 else:
+                    self.pit[name].add((requester, addr))
+                    
+                logging.debug(f"{self.node_name} added interest in {name} to PIT")
+                
+                success = False
+                for destination, dest_addr in addr_to_try:
+                    json_packet = build_packet('interest', self.node_name, destination, name, '')
+                    success = self.send_packet(destination, json_packet, dest_addr)
+                    
+                    if success:
+                        break
+                    
+                if not success:
                     json_packet = build_packet('data', self.node_name, requester, name,
-                                               f'no sensor {sensor_type} available')
-                    self.send_packet(requester, json_packet)
+                                               f'No data {name} available')
+                    self.send_packet(requester, json_packet, addr)
+                    
+            else:
+                json_packet = build_packet('data', self.node_name, requester, name,
+                                           f'No data {name} available')
+                self.send_packet(requester, json_packet, addr)
+        
+            
+
                     
 #    def handle_interest(self, interest_packet, requester):
 #        name = interest_packet['name']
@@ -336,6 +359,7 @@ class NDNNode:
     def handle_data(self, data_packet):
         name = data_packet['name']
         data = str(data_packet['data'])
+        logging.debug(f"Recieved packet name: {name}, data: {data}")
         if re.compile(r'command').search(data):
             sensor_type = data_packet['name'].split('/').pop()
             if sensor_type in self.sensor_type:
@@ -381,32 +405,80 @@ class NDNNode:
             else:
                 # TODO: logging.debug()
                 print(f"Received {data_packet}")
-
-    def send_packet(self, peer_node_name, json_packet):
+        
+    def send_packet(self, peer_node_name, json_packet, addr=None):
+        success = False
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            if peer_node_name in self.fib:
-                peer_list = self.fib.get_routes(peer_node_name)
-                for peer in peer_list:
-                    try:
-                        s.connect(peer)
-                        key = self.shared_secrets[peer_node_name]
-                        encrypted_data = self.ecc_manager.encrypt_data(key, json_packet['data'].encode('utf-8'))
-                        # 将加密后的字节串转换为Base64编码的字符串
-                        json_packet['data'] = base64.b64encode(encrypted_data).decode('utf-8')
-                        # packet = self.ecc_manager.encrypt_data(key, json.dumps(json_packet).encode('utf-8'))
-                        packet = json.dumps(json_packet).encode('utf-8')
-                        s.sendall(packet)
-                        packet_type = json_packet['type']
-                        # TODO: logging.debug()
-                        print(f"Sent {packet_type} '{json_packet['name']}' to {json_packet['destination']}")
-                        break
-                    except ConnectionRefusedError:
-                        print(f"Failed to connect to {peer}")
-                    except Exception as err:
-                        print(f"Error in send_packet() to {peer} {err}")
-            else:
-                # TODO: logging.debug()
-                print(f"{peer_node_name.capitalize()} is not in FIB.")
+            try:
+                if addr == None:
+                    addr = self.fib.peer_list[peer_node_name]
+                
+                s.connect(addr)
+                key = self.shared_secrets[peer_node_name]
+                encrypted_data = self.ecc_manager.encrypt_data(key, json_packet['data'].encode('utf-8'))
+                logging.debug(f"Encrypting data {json_packet['data']}")
+                # Convert encrypted byte string to Base64 encoded string
+                json_packet['data'] = base64.b64encode(encrypted_data).decode('utf-8')
+                # packet = self.ecc_manager.encrypt_data(key, json.dumps(json_packet).encode('utf-8'))
+                packet = json.dumps(json_packet).encode('utf-8')
+                s.sendall(packet)
+                logging.debug(f"Sent {json_packet['type']} '{json_packet['name']}' to {json_packet['destination']}")
+                success = True
+            except Exception as err:
+                logging.error(f"Error in send_packet() to {peer_node_name} {type(err).__name__}: {err}")
+        return success
+                
+#    def send_packet(self, peer_node_name, json_packet):
+#        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+#            if peer_node_name in self.fib:
+#                peer_list = self.fib.get_routes(peer_node_name)
+#                for peer in peer_list:
+#                    try:
+#                        s.connect(peer)
+#                        key = self.shared_secrets[peer_node_name]
+#                        encrypted_data = self.ecc_manager.encrypt_data(key, json_packet['data'].encode('utf-8'))
+#                        # 将加密后的字节串转换为Base64编码的字符串
+#                        json_packet['data'] = base64.b64encode(encrypted_data).decode('utf-8')
+#                        # packet = self.ecc_manager.encrypt_data(key, json.dumps(json_packet).encode('utf-8'))
+#                        packet = json.dumps(json_packet).encode('utf-8')
+#                        s.sendall(packet)
+#                        packet_type = json_packet['type']
+#                        # TODO: logging.debug()
+#                        print(f"Sent {packet_type} '{json_packet['name']}' to {json_packet['destination']}")
+#                        break
+#                    except ConnectionRefusedError:
+#                        print(f"Failed to connect to {peer}")
+#                    except Exception as err:
+#                        print(f"Error in send_packet() to {peer} {err}")
+#            else:
+#                # TODO: logging.debug()
+#                print(f"{peer_node_name.capitalize()} is not in FIB.")
+
+#    def send_packet(self, peer_node_name, json_packet):
+#        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+#            if peer_node_name in self.fib:
+#                peer_list = self.fib.get_routes(peer_node_name)
+#                for peer in peer_list:
+#                    try:
+#                        s.connect(peer)
+#                        key = self.shared_secrets[peer_node_name]
+#                        encrypted_data = self.ecc_manager.encrypt_data(key, json_packet['data'].encode('utf-8'))
+#                        # 将加密后的字节串转换为Base64编码的字符串
+#                        json_packet['data'] = base64.b64encode(encrypted_data).decode('utf-8')
+#                        # packet = self.ecc_manager.encrypt_data(key, json.dumps(json_packet).encode('utf-8'))
+#                        packet = json.dumps(json_packet).encode('utf-8')
+#                        s.sendall(packet)
+#                        packet_type = json_packet['type']
+#                        # TODO: logging.debug()
+#                        print(f"Sent {packet_type} '{json_packet['name']}' to {json_packet['destination']}")
+#                        break
+#                    except ConnectionRefusedError:
+#                        print(f"Failed to connect to {peer}")
+#                    except Exception as err:
+#                        print(f"Error in send_packet() to {peer} {err}")
+#            else:
+#                # TODO: logging.debug()
+#                print(f"{peer_node_name.capitalize()} is not in FIB.")
                 
 #    def send_packet(self, peer_node_name, json_packet):
 #        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -432,27 +504,27 @@ class NDNNode:
 
 
 def main():
-    node_name = os.environ['NODE_NAME']
-    port = int(os.environ['PORT'])
-    broadcast_port = int(os.environ['BROADCAST_PORT'])
-    sensor_type = os.environ['SENSOR_TYPE'].split(',')
+    #node_name = os.environ['NODE_NAME']
+    #port = int(os.environ['PORT'])
+    #broadcast_port = int(os.environ['BROADCAST_PORT'])
+    #sensor_type = os.environ['SENSOR_TYPE'].split(',')
     
-    #parser = argparse.ArgumentParser(description='Run a NDN node.')
-    #parser.add_argument('--node-name', type=str, required=True, help='The node name.')
-    #parser.add_argument('--sensor-type', type=str, help='The sensor name.')
+    parser = argparse.ArgumentParser(description='Run a NDN node.')
+    parser.add_argument('--node-name', type=str, required=True, help='The node name.')
+    parser.add_argument('--sensor-type', type=str, help='The sensor name.')
     #parser.add_argument('--get', type=str, required=True, help='The data name to get.')
-    #parser.add_argument('--port', type=int, required=True, help='The port number to bind the node to.')
-    #parser.add_argument('--broadcast-port', type=int, required=True, help='The port number to bind the node to.')
-    #args = parser.parse_args()
-    #node_name = args.node_name
-    #port = args.port
-    #broadcast_port = args.broadcast_port #int(os.environ['BROADCAST_PORT'])
+    parser.add_argument('--port', type=int, required=True, help='The port number to bind the node to.')
+    parser.add_argument('--broadcast-port', type=int, required=True, help='The port number to bind the node to.')
+    args = parser.parse_args()
+    node_name = args.node_name
+    port = args.port
+    broadcast_port = args.broadcast_port #int(os.environ['BROADCAST_PORT'])
     
-    #if args.sensor_type is None:
-    #    sensor_type = ''
-    #else:
-    #    sensor_type = args.sensor_type
-    #sensor_type = sensor_type.split(',')
+    if args.sensor_type is None:
+        sensor_type = ''
+    else:
+        sensor_type = args.sensor_type
+    sensor_type = sensor_type.split(',')
 
     node = NDNNode(node_name.replace('\r', ''), port, broadcast_port, sensor_type)
     node.start()
@@ -462,7 +534,7 @@ def main():
             if command == 'interest':
                 destination = input('Enter destination node for interest packet: ').strip()
                 sensor_name = input('Enter sensor name: ').strip()
-                json_packet = build_packet('interest', node.node_name, destination, f'{node.node_name}/{sensor_name}',
+                json_packet = build_packet('interest', node.node_name, destination, f'{destination}/{sensor_name}',
                                            '')
                 # send interest to node according to fib
                 logging.debug("call send packet from main loop")
