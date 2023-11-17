@@ -119,7 +119,6 @@ class NDNNode:
                                                  )
             logging.debug(f"{self.node_name} broadcasting distance vector on port {self.broadcast_port}")
             s.sendto(json.dumps(json_packet).encode('utf-8'), ('<broadcast>', self.broadcast_port))
-        print('offline')
 
     def listen_for_peer_broadcasts(self):
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
@@ -335,7 +334,6 @@ class NDNNode:
         while self.running:
             time.sleep(10)  # Wait for 10 seconds
             self.cs.clear()
-            print("Content Store cleared")
 
 
 def main():
