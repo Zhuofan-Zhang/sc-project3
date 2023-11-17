@@ -1,7 +1,0 @@
-PYTHONUNBUFFERED=1
-BROADCAST_PORT=33000
-DEVICE_NAME=device1
-HOUSE_NAME=house1
-PORT=8000
-ROOM_NAME=room1
-SENSOR_TYPE=temperature,light,humidity,radiation,co2,smoke,motion,smoke

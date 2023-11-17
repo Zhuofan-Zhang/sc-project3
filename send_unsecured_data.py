@@ -2,7 +2,6 @@
 
 INTERVAL_SECONDS = 5
 
-import base64
 import json
 import os
 import random
@@ -15,7 +14,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 
 from ECCManager import ECCManager
-from helper import decode_broadcast_packet, build_broadcast_packet
+from helper import decode_broadcast_packet
 from sensor import Sensor
 
 
@@ -37,9 +36,8 @@ class SendData:
         self.running.set()
 
     def start(self):
-        broadcast_thread = threading.Thread(target=self.broadcast_presence)
         discovery_thread = threading.Thread(target=self.listen_for_peer_broadcasts)
-        self.threads.extend([broadcast_thread, discovery_thread])
+        self.threads.extend([discovery_thread])
         for t in self.threads:
             t.start()
 
@@ -47,24 +45,6 @@ class SendData:
         self.broadcast_offline()
         self.running.clear()
         os._exit(0)
-
-    def broadcast_presence(self):
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-
-            while self.running:
-                json_packet = build_broadcast_packet('discovery', 'online', self.node_name, self.port,
-                                                     self.public_key_pem, ','.join([]))
-                s.sendto(json.dumps(json_packet).encode('utf-8'), ('<broadcast>', self.broadcast_port))
-                time.sleep(1)
-
-    def broadcast_offline(self):
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            json_packet = build_broadcast_packet('discovery', 'offline', self.node_name, self.port, self.public_key_pem,
-                                                 ','.join([]))
-            s.sendto(json.dumps(json_packet).encode('utf-8'), ('<broadcast>', self.broadcast_port))
-        print('offline')
 
     def listen_for_peer_broadcasts(self):
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
@@ -101,11 +81,6 @@ class SendData:
             try:
                 peer = self.fib.get(peer_node_name)
                 s.connect(peer)
-                key = self.shared_secrets[peer_node_name]
-                encrypted_data = self.ecc_manager.encrypt_data(key, json_packet['data'].encode('utf-8'))
-                # 将加密后的字节串转换为Base64编码的字符串
-                json_packet['data'] = base64.b64encode(encrypted_data).decode('utf-8')
-                # packet = self.ecc_manager.encrypt_data(key, json.dumps(json_packet).encode('utf-8'))
                 packet = json.dumps(json_packet).encode('utf-8')
                 s.sendall(packet)
                 packet_type = json_packet['type']
@@ -114,7 +89,7 @@ class SendData:
                 print(f"Failed to connect to {peer}")
 
     def send(self):
-        # while True:  # 循环发送数据
+        # while True:
         devices = [key for key in self.fib.keys()]
         destination_device = random.choice(devices)
 

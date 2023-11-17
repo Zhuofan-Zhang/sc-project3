@@ -110,7 +110,7 @@ class ForwardingInfoBase:
         
         return dv_changed
 
-    def get_route(self, data_name):
+    def get_routes(self, data_name):
         """
         Get routes that lead to data_name. Returns a list of addresses in order
         of longest prefix matches and shortest number of hops.
@@ -143,13 +143,17 @@ class ForwardingInfoBase:
             prefix = '/'.join(split[:len(split)-i])
             if not prefix.endswith('/'):
                 prefix += '/'
+                
+            # Otherwise would select all the nodes starting with '/' as addresses to try
+            if prefix == '/':
+                break
         
             # Sort in ascending order by number of hops
             for index, value in dist_nbr[dist_nbr_fmt.index.str.startswith(prefix)].sort_values().items():
                 # Get from peer list and add to results list
                 addr = peer_list_cpy.pop(index, None)
                 if addr is not None:
-                    addr_to_try.append(addr)
+                    addr_to_try.append((index, addr))
                 if not peer_list_cpy:
                     break
                     
@@ -160,6 +164,9 @@ class ForwardingInfoBase:
     
     def get_distance_vector(self):
         return self.dv_table[self.name].to_dict()
+    
+    def get_peers(self):
+        return self.peer_list.keys()
     
     # -------------------------------------------------------------------------
     # Private Methods:
@@ -244,7 +251,7 @@ class ForwardingInfoBase:
         None.
 
         """
-        self.dv_table = self.dv_table.drop(index=[name], columns=[name], error='ignore')
+        self.dv_table = self.dv_table.drop(index=[name], columns=[name], errors='ignore')
 
     def _update_peer_distance_vector(self, peer_name, peer_vector):
         """
