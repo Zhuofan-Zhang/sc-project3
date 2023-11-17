@@ -62,9 +62,6 @@ class NDNNode:
     def stop(self):
         self.broadcast_offline()
         self.running.clear()
-        logging.info("waiting for all threads to finish")
-        for t in self.threads:
-            t.join()
         os._exit(0)
 
     def listen_for_connections(self):
