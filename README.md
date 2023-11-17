@@ -50,11 +50,11 @@ chmod +x ./device7 ./device8 ./device9
 4. Start auto sender sending encrypted data
 
 ```shell
-python send_data.py
+python3 send_data.py
 ```
 
 5. Start auto sender sending unencrypted data
 
 ```shell
-python send_unsecured_data.py
+python3 send_unsecured_data.py
 ```

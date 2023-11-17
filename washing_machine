@@ -2,4 +2,4 @@
 
 chmod +x ./scripts/washing_machine_init.sh
 source ./scripts/washing_machine_init.sh
-python NDNNode.py
+python3 NDNNode.py

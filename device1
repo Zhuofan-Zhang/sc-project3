@@ -2,4 +2,4 @@
 
 chmod +x ./scripts/device1.sh
 source ./scripts/device1.sh
-python NDNNode.py
+python3 NDNNode.py

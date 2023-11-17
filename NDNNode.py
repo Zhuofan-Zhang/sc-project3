@@ -229,6 +229,12 @@ class NDNNode:
             except ConnectionRefusedError:
                 print(f"Failed to connect to {peer}")
 
+    def clear_content_store(self):
+        while self.running:
+            time.sleep(10)  # Wait for 10 seconds
+            self.cs.clear()
+            print("Content Store cleared")
+
 
 def main():
     node_name = os.environ['NODE_NAME']
