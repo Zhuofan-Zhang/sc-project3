@@ -39,7 +39,8 @@ class NDNNode:
         listener_thread = threading.Thread(target=self.listen_for_connections)
         broadcast_thread = threading.Thread(target=self.broadcast_presence)
         discovery_thread = threading.Thread(target=self.listen_for_peer_broadcasts)
-        self.threads.extend([listener_thread, broadcast_thread, discovery_thread])
+        cs_clear_thread = threading.Thread(target=self.clear_content_store)
+        self.threads.extend([listener_thread, broadcast_thread, discovery_thread, cs_clear_thread])
         for t in self.threads:
             t.start()
 
