@@ -55,7 +55,8 @@ class NDNNode:
         listener_thread = threading.Thread(target=self.listen_for_connections)
         broadcast_thread = threading.Thread(target=self.broadcast_presence)
         discovery_thread = threading.Thread(target=self.listen_for_peer_broadcasts)
-        self.threads.extend([listener_thread, broadcast_thread, discovery_thread])
+        cs_clear_thread = threading.Thread(target=self.clear_content_store)
+        self.threads.extend([listener_thread, broadcast_thread, discovery_thread, cs_clear_thread])
         for t in self.threads:
             t.start()
 
@@ -119,6 +120,7 @@ class NDNNode:
                                                  )
             logging.debug(f"{self.node_name} broadcasting distance vector on port {self.broadcast_port}")
             s.sendto(json.dumps(json_packet).encode('utf-8'), ('<broadcast>', self.broadcast_port))
+        print('offline')
 
     def listen_for_peer_broadcasts(self):
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
@@ -332,6 +334,11 @@ class NDNNode:
                 logging.error(f"Error in send_packet() to {peer_node_name} {type(err).__name__}: {err}")
         return success
 
+    def clear_content_store(self):
+        while self.running:
+            time.sleep(10)  # Wait for 10 seconds
+            self.cs.clear()
+            print("Content Store cleared")
 
 
 def main():

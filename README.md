@@ -18,55 +18,19 @@ Enter data content: command/on
 
 Start devices separately in different terminals
 
-1. Start Device1
-
+1. Start devices:
+Run each of the following scripts in different terminals
 ```shell
-chmod +x ./scripts/device1.sh
-source ./scripts/device1.sh
-python NDNNode.py
+chmod +x ./device1 ./device2 ./device3 ./device4 ./washing_machine ./phone
+./device1 
+./device2 
+./device3 
+./device4 
+./washing_machine
+./phone
 ```
 
-2. Start Device2
-
-```shell
-chmod +x ./scripts/device2.sh
-source ./scripts/device2.sh
-python NDNNode.py
-```
-
-3. Start Device3
-
-```shell
-chmod +x ./scripts/device3.sh
-source ./scripts/device3.sh
-python NDNNode.py
-```
-
-4. Start Device4
-
-```shell
-chmod +x ./scripts/device4.sh
-source ./scripts/device4.sh
-python NDNNode.py
-```
-
-5. Start washing machine
-
-```shell
-chmod +x ./scripts/washing_machine.sh
-source ./scripts/washing_machine.sh
-python NDNNode.py
-```
-
-6. Start phone
-
-```shell
-chmod +x ./scripts/phone.sh
-source ./scripts/phone.sh
-python NDNNode.py
-```
-
-7. Start auto sender
+2. Start auto sender sending encrypted data
 
 ```shell
 python send_data.py
