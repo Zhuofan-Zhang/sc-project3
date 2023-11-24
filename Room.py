@@ -1,10 +1,8 @@
 """
 Room class
 - Simulates 'natural changes' and changes due to turned on apparatus (like heaters, lights)
-- Gets initialised with one device, but more can be added if needed
+- Gets initialised with one device which reads and can affect room stats
 """
-import os
-import sys
 from random import uniform
 from time import sleep
 from Device import Device
@@ -13,7 +11,8 @@ from Apparatus import Apparatus
 class Room:
     def __init__(self, room_id, device_l_port, device_b_port):
         self.room_id = room_id
-        self.device = Device(self, str(room_id)+"device", device_l_port, device_b_port)
+        self.device = Device(self, str(room_id)+"_device", device_l_port, device_b_port)
+        self.stats_file = f"room_stats/{self.room_id}_stats.txt"
         self.stats = {
             "temp": 20,         # Temp in degrees Celsius
             "humidity": 0.4,    # Humidity percentage as decimal
@@ -33,6 +32,7 @@ class Room:
         while True:
             self.update_via_apparatus()
             self.update_via_natural_changes()
+            self.log_stats()
 
     def update_via_apparatus(self):
         for _, app in self.apparatus.items():
@@ -43,9 +43,9 @@ class Room:
                     self.stats[app.affected_stat] += app.change_amount
                 elif app.change_type == "decrease_by":
                     self.stats[app.affected_stat] -= app.change_amount
-                if app.on and app.affected_stat in self.stats.keys():
-                    if app.change_type == "set_to":
-                        self.stats[app.affected_stat] = 0
+            if not app.on and app.affected_stat in self.stats.keys():
+                if app.change_type == "set_to":
+                    self.stats[app.affected_stat] = 0
 
     def update_via_natural_changes(self):
         # Simulate temperature fluctuation within a realistic range
@@ -63,8 +63,19 @@ class Room:
         self.stats["CO2"] = min(max(self.stats["CO2"], 300), 1000)
         sleep(1)   
 
-    def set_apparatus(self, apparatus: Apparatus):
-        self.apparatus[apparatus.apparatus_type] = apparatus
+    def log_stats(self):
+        stats_content = f"Room {self.room_id}:\n" \
+                        f"Temperature: {self.stats['temp']} °C\n" \
+                        f"Humidity: {self.stats['humidity'] * 100} %\n" \
+                        f"CO Level: {self.stats['CO']} ppm\n" \
+                        f"CO2 Level: {self.stats['CO2']} ppm\n" \
+                        f"Motion: {'Yes' if self.stats['motion'] else 'No'}\n" \
+                        f"Light Level: {self.stats['light']} lux\n\n" 
+        for _, app in self.apparatus.items():
+            stats_content += f"{app.apparatus_type}: {'on' if app.on else 'off'}\n"              
+
+        with open(self.stats_file, "w") as file:
+            file.write(stats_content)
 
     def main(self):
         self.device.turn_on()

@@ -7,7 +7,7 @@ Device class
 - Trigger condition defaults set, but no default trigger functions yet
 """
 
-import json
+import logging
 import threading
 from NDNNode import NDNNode
 
@@ -16,9 +16,21 @@ ACTUATOR_TYPES = ["heater", "ac", "humidifier", "smoke_alarm", "lights"]
 
 class Device:
     def __init__(self, room, device_id, listening_port, broadcast_port):
-        self.device_id = device_id
-        # self.node = NDNNode(self.device_id, listening_port, broadcast_port, SENSOR_TYPES)
         self._room = room
+        self.device_id = device_id
+        self.logger = logging.getLogger(f"{self.device_id}_logger")
+        handler = logging.FileHandler(f"device_logs/{self.device_id}.log")
+        formatter = logging.Formatter("%(asctime)s.%(msecs)04d [%(levelname)s] %(message)s", datefmt="%H:%M:%S:%m")
+        handler.setFormatter(formatter)
+        self.logger.addHandler(handler)
+        self.logger.setLevel(logging.DEBUG)
+        
+        self._sensors = [self.DeviceSensor(device_id, sens_type, self._room) 
+                         for sens_type in SENSOR_TYPES]
+        self.node = NDNNode(self.device_id, listening_port, broadcast_port, SENSOR_TYPES, self._sensors)
+        
+
+        # Default Triggers
         self._triggers = {
             # trigger format: ('comparer', 'value', 'actuator' 'effect')
             "temp":     [("<", 19, "heater", "on"),
@@ -34,34 +46,23 @@ class Device:
             "motion":   [("<", 1, "lights", "off"),
                          (">", 0, "lights", "on")]               
         }
-        self._sensors = [self.DeviceSensor(device_id, sens_type, self._triggers[sens_type] if sens_type in self._triggers else None) 
-                         for sens_type in SENSOR_TYPES]
-        self._on = False
+        
+        self.on = False
 
-    def _listen_for_data(self):
-        pass
-        while self._on:
-            data = None # self.node.listen_for_command()
-            # print(f"Received data: {data.decode('utf-8')}")
-            if data is not None:
-                data_type, data_contents = data
-                if data_type == "command":
-                    if data_contents == "off":
-                        self.turn_off()
-                    else:
-                        (app, app_status) = data_contents
-                        self._room.apparatus[app].on = app_status
+    def _check_commands(self):
+        while self.on:
+            for apparatus, effect in self.node.commands:
+                self._room.apparatus[apparatus].on = effect
+                self.logger.debug(f"{self.device_id}: Recieved command to turn '{apparatus}' '{effect}'")
+                self.node.commands.remove((apparatus, effect))
 
     def _run_sensors(self):
-        while self._on:
+        while self.on:
             for sensor in self._sensors:
-                reading = sensor.get_reading(self._room)
+                reading = sensor.get_reading()
                 if reading != sensor.last_reading:
                     sensor.last_reading = reading
                     self._actuate(sensor.sensor_type, reading)
-                    if sensor.sensor_type == 'light':
-                        print(f"{self.device_id}/{sensor.sensor_type}: {reading}")
-                    # self.node.emit(sensor.name, reading)
 
     def _actuate(self, sensor_type, reading):
         if sensor_type in self._triggers:
@@ -70,42 +71,33 @@ class Device:
                 if eval(compare_string) and apparatus in self._room.apparatus:
                     if self._room.apparatus[apparatus].on != (effect == "on"):
                         self._room.apparatus[apparatus].on = (effect == "on")
-                        print(f"{self.device_id}: turning {apparatus} {'on' if (effect == 'on') else 'off'}")
-                        # self.node.emit_actuation(sensor.name)
-
-    def update_trigger(self, target, trigger):
-        if target in self._triggers:
-            self._triggers[target] = trigger
-            self._sensors[target].update_trigger(trigger)
+                        self.logger.debug(f"{self.device_id}: actuating {apparatus} {effect}")
 
     def turn_on(self):
-        self._on = True
-        threads = {"lt": threading.Thread(target=self._listen_for_data), 
+        self.on = True
+        threads = {"ct": threading.Thread(target=self._check_commands), 
                    "rt": threading.Thread(target=self._run_sensors)}     
         for _ , t in threads.items():
             t.daemon = True
             t.start()
-        # self.node.start()
+        self.node.start()
+        self.logger.debug(f"{self.device_id} is on")
 
     def turn_off(self):
-        self._on = False
-        # self.node.broadcast_offline()
+        self.on = False
+        self.node.stop()
+        self.logger.debug(f"{self.device_id} is off")
 
     """
     DeviceSensor class
     - Reads the correct stat from the room (eg 'temp' sensor reads 'temp' stat)
-    - Has programmable trigger (trigger condition) and trigger function
-    - Trigger function will run if trigger condition met
-    - No Trigger function by default
-
-    And example of a trigger function would be to tell the rooms heater to turn off if the 
-    is within set range
     """
     class DeviceSensor:
-        def __init__(self, device_id, sensor_type, trigger):
-            self.name = device_id + '@' + sensor_type
+        def __init__(self, device_id, sensor_type, room):
+            self.room = room
+            self.name = device_id + '/' + sensor_type
             self.sensor_type = sensor_type
             self.last_reading = None
 
-        def get_reading(self, room):
-            return round(room.stats[self.sensor_type], 3)
+        def get_reading(self):
+            return round(self.room.stats[self.sensor_type], 3)
