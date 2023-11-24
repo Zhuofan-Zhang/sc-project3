@@ -1,6 +1,0 @@
-#!/bin/bash
-
-
-chmod +x ./scripts/device2.sh
-source ./scripts/device2.sh
-python3 NDNNode.py

@@ -1,5 +1,0 @@
-#!/bin/bash
-
-chmod +x ./scripts/phone_init.sh
-source ./scripts/phone_init.sh
-python3 NDNNode.py
