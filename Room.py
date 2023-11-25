@@ -2,6 +2,8 @@
 Room class
 - Simulates 'natural changes' and changes due to turned on apparatus (like heaters, lights)
 - Gets initialised with one device which reads and can affect room stats
+
+@author: C. Jonathan Cicai
 """
 from random import uniform
 from time import sleep

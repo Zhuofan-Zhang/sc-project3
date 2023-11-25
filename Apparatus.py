@@ -8,11 +8,13 @@ Apparatus class
         rooms 'affected_stat' (temp in this case) to change by the 'change_amount'.
 
 Valid 'change_type' : "set_to", "increase_by", "decrease_by"
+
+@author: C. Jonathan Cicai
 """
 
 class Apparatus:
     def __init__(self, room_id, apparatus_type, affected_stat, change_type, change_amount):
-        self.id = room_id + "@" + apparatus_type
+        self.id = room_id + "/" + apparatus_type
         self.apparatus_type = apparatus_type
         self.affected_stat = affected_stat
         self.change_type = change_type

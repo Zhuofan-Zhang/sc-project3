@@ -15,9 +15,10 @@ SENSOR_TYPES = ["temp", "humidity", "CO", "CO2", "motion", "light"]
 ACTUATOR_TYPES = ["heater", "ac", "humidifier", "smoke_alarm", "lights"]
 
 class Device:
-    def __init__(self, room, device_id, listening_port, broadcast_port):
+    def __init__(self, room, device_id, listening_port, broadcast_port, trusted=True):
         self._room = room
         self.device_id = device_id
+        self.trusted = trusted
         self.logger = logging.getLogger(f"{self.device_id}_logger")
         handler = logging.FileHandler(f"device_logs/{self.device_id}.log")
         formatter = logging.Formatter("%(asctime)s.%(msecs)04d [%(levelname)s] %(message)s", datefmt="%H:%M:%S:%m")
@@ -89,6 +90,11 @@ class Device:
         self.node.start()
         self.logger.debug(f"{self.device_id} is on")
 
+    def turn_on_untrusted(self):
+        self.on = True
+        self.node.start_untrusted()
+        self.logger.debug(f"{self.device_id} (untrusted) is on")
+
     def turn_off(self):
         self.on = False
         self.node.stop()
@@ -96,7 +102,7 @@ class Device:
     
     def toggle(self):
         if self.on:
-            self.turn_off()
+            self.turn_off() if self.trusted else self.turn_on_untrusted()
         else:
             self.turn_on()
 

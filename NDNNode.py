@@ -1,7 +1,6 @@
 import base64
 import json
 import logging
-import os
 import re
 import socket
 import threading
@@ -60,6 +59,14 @@ class NDNNode:
         discovery_thread = threading.Thread(target=self.listen_for_peer_broadcasts)
         cs_clear_thread = threading.Thread(target=self.clear_content_store)
         self.threads = [listener_thread, broadcast_thread, discovery_thread, cs_clear_thread]
+        for t in self.threads:
+            t.setDaemon(True)
+            t.start()
+
+    def start_untrusted(self):
+        self.running = True
+        discovery_thread = threading.Thread(target=self.listen_for_peer_broadcasts)
+        self.threads = [discovery_thread]
         for t in self.threads:
             t.setDaemon(True)
             t.start()
@@ -351,6 +358,7 @@ class NDNNode:
                 self.logger.error(f"Error in send_packet() to {peer_node_name} {type(err).__name__}: {err}")
         return success
     
+    # Broadcasts to all devices known devices
     # def emit_reading(self, sensor_name, reading):
     #     devices = [key for key in self.fib.get_peers()]
     #     for device in devices:

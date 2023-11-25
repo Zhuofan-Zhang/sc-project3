@@ -3,6 +3,8 @@ SmartHome class
 Example Usage
 
 python SmartHome.py --home_id 1 --n_rooms 5
+
+@author: C. Jonathan Cicai
 """
 import threading
 import random
@@ -92,8 +94,6 @@ class SmartHome:
                             data_name = input('Type in data name (e.g., "temp", "humidity", "CO", "CO2", "motion", "light"): ')
                             dest_node = self.rooms[dest_index].device.node.node_name
                             room.device.node.create_send_interest_packet(f"{dest_node}/{data_name}", dest_node)
-                            print(room.device.node.node_name)
-                            print(dest_node)
                         else:
                             print("Invalid device selection. Please enter a valid device number.")
                     elif action == 'actuate':
@@ -113,11 +113,6 @@ class SmartHome:
             else:
                 print("Invalid selection. Please enter a valid room number.")
 
-
-            
-       
-        
-
 def parse_args():
     parser = argparse.ArgumentParser(description='Simulate a Smart Home with motion detection in multiple rooms.')
     parser.add_argument('--home_id', type=int, required=True, help='Home ID')
@@ -132,3 +127,6 @@ if __name__ == "__main__":
     args = parse_args()
     home = SmartHome(home_id=args.home_id, n_rooms=args.rooms)
     home.main()
+    print("Turning off devices safely...")
+    for room in home.rooms:
+        room.device.turn_off()

@@ -1,3 +1,7 @@
+"""
+@author: C. Jonathan Cicai
+"""
+
 import time
 import os
 
