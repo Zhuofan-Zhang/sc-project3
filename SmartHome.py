@@ -39,50 +39,80 @@ class SmartHome:
 
         while True:
             print("Select a room via room number below (or 'quit'):")
-            for i, room in enumerate(self.rooms, start=0):
+            for i, room in enumerate(self.rooms):
                 print(f"{i}: {room.room_id}")
-            selection = input().strip()
-            if selection.lower() == 'quit':
+
+            selection = input().strip().lower()
+
+            if selection == 'quit':
                 break  # Exit the loop if the user enters 'quit'
+
+            while not selection.isdigit():
+                print("Invalid input. Please enter a room number or 'quit'.")
+                selection = input().strip().lower()
+
             selection_index = int(selection)
+
             if 0 <= selection_index < len(self.rooms):
                 room = self.rooms[selection_index]
                 print(room.device.node.node_name)
-                selection_valid = False
-                while not selection_valid:
-                    selection = input("Select action: 'turn on/off', 'send interest': ")
-                    if selection == 'turn on':
-                        selection_valid = True
-                        if not room.device.on:
-                            print("Turning device on...")
-                            room.device.turn_on()
-                        print("Device is on")
-                    elif selection == 'turn off':
-                        selection_valid = True
-                        if room.device.on:
-                            print("Turning device off...")
-                            room.device.turn_off()
-                        print("Device is off")
-                    elif selection == 'send interest':
-                        selection_valid = True
+                
+                while True:
+                    print("Select action: 'turn on/off', 'send interest', 'actuate' (or 'back' to go back):")
+                    action = input().strip().lower()
+
+                    if action == 'back':
+                        break
+
+                    while action not in ['turn on', 'turn off', 'send interest', 'actuate']:
+                        print("Invalid selection. Please enter a valid action.")
+                        action = input().strip().lower()
+
+                    if action in ['turn on', 'turn off']:
+                        if (action == 'turn on' and not room.device.on) or (action == 'turn off' and room.device.on):
+                            print(f"Turning device {action.split()[1]}...")
+                            room.device.toggle()
+                            print(f"Device is {'on' if room.device.on else 'off'}")
+                        else:
+                            print(f"Device is already {'on' if room.device.on else 'off'}")
+                    elif action == 'send interest':
                         print("Choose destination device:")
-                        for i, r in enumerate(self.rooms, start=0):
+                        for i, r in enumerate(self.rooms):
                             print(f"{i}: {r.device.device_id}")
-                        selection = input()
-                        selection_index = int(selection)
-                        if 0 <= selection_index < len(self.rooms):
-                            data_name = input('Type in data name (eg "temp", "humidity", "CO", "CO2", "motion", "light"): ')
-                            # create_send_intrest_packet(self, data_name, destination)
-                            dest_node = self.rooms[selection_index].device.node.node_name
+
+                        dest_selection = input().strip()
+
+                        while not dest_selection.isdigit():
+                            print("Invalid input. Please enter a device number.")
+                            dest_selection = input().strip()
+
+                        dest_index = int(dest_selection)
+
+                        if 0 <= dest_index < len(self.rooms):
+                            data_name = input('Type in data name (e.g., "temp", "humidity", "CO", "CO2", "motion", "light"): ')
+                            dest_node = self.rooms[dest_index].device.node.node_name
                             room.device.node.create_send_interest_packet(f"{dest_node}/{data_name}", dest_node)
                             print(room.device.node.node_name)
                             print(dest_node)
-                            
+                        else:
+                            print("Invalid device selection. Please enter a valid device number.")
+                    elif action == 'actuate':
+                        print("Select device to actuate:")
+                        for k in room.apparatus:
+                            print(k)
+
+                        apparatus_selection = input().strip()
+
+                        while apparatus_selection not in room.apparatus:
+                            print("Not a valid apparatus. Please select a valid device.")
+                            apparatus_selection = input().strip()
+
+                        room.device.actuate(apparatus_selection)
                     else:
                         print("Invalid selection")
-
             else:
                 print("Invalid selection. Please enter a valid room number.")
+
 
             
        

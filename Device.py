@@ -73,6 +73,12 @@ class Device:
                         self._room.apparatus[apparatus].on = (effect == "on")
                         self.logger.debug(f"{self.device_id}: actuating {apparatus} {effect}")
 
+    def actuate(self, apparatus_name):
+        # public version of actuate, it just toggles on/off an apparatus
+        apparatus = self._room.apparatus[apparatus_name]
+        apparatus.on = not apparatus.on
+        self.logger.debug(f"{self.device_id}: actuating {apparatus_name} {'on' if apparatus.on else 'off'}")
+
     def turn_on(self):
         self.on = True
         threads = {"ct": threading.Thread(target=self._check_commands), 
@@ -87,6 +93,12 @@ class Device:
         self.on = False
         self.node.stop()
         self.logger.debug(f"{self.device_id} is off")
+    
+    def toggle(self):
+        if self.on:
+            self.turn_off()
+        else:
+            self.turn_on()
 
     """
     DeviceSensor class

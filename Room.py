@@ -25,7 +25,7 @@ class Room:
             "heater":     Apparatus(room_id, "heater", "temp", "increase_by", 0.1),
             "lights":     Apparatus(room_id, "lights", "light", "set_to", 100),
             "ac":         Apparatus(room_id, "ac", "temp", "decrease_by", 0.05),
-            "humidifier": Apparatus(room_id, "humidifier", "humidity", "increase_by", 0.0001)
+            "humidifier": Apparatus(room_id, "humidifier", "humidity", "increase_by", 0.01)
         }
 
     def simulate(self):
