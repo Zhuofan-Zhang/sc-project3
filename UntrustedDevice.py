@@ -20,7 +20,7 @@ while True:
 
     while not dest_selection.isdigit():
         if dest_selection == 'quit':
-            break
+            os._exit(0)
         print("Invalid input. Please enter a device number.")
         dest_selection = input().strip()
 
