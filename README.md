@@ -89,6 +89,8 @@ After the steps of scenario 1, the first terminal that is running the `SmartHome
 
 #### Scenario 3: A node sends an interest packet for a data name that does not exist.
 
+After the steps of scenario 2, the first terminal that is running the `SmartHome` instance should still be in the menu for `Room_0`.
+
 1. Enter `send interest` to bring up destination options
 3. Enter `1` to select `Room_1` as the destination of the interest packet.
 4. Enter `foobar` to send the interest packet for data `room_1_device/foobar` that doesn't exist.
