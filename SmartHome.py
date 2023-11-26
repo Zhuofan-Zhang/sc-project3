@@ -10,6 +10,7 @@ import threading
 import random
 import time
 import os
+import shutil
 import argparse
 from Room import Room
 
@@ -21,7 +22,7 @@ class SmartHome:
         port = 8080
         self.rooms = []
         for i in range(n_rooms):
-            self.rooms.append(Room(f"room_{i}", port, broadcast_port))
+            self.rooms.append(Room(home_id, f"room_{i}", port, broadcast_port))
             port+=1
         
     def simulate_walking(self):
@@ -38,80 +39,83 @@ class SmartHome:
         for t in threads:
             t.daemon = True
             t.start()
+        try:
+            while True:
+                print("Select a room via room number below (or 'quit'):")
+                for i, room in enumerate(self.rooms):
+                    print(f"{i}: {room.room_id}")
 
-        while True:
-            print("Select a room via room number below (or 'quit'):")
-            for i, room in enumerate(self.rooms):
-                print(f"{i}: {room.room_id}")
-
-            selection = input().strip().lower()
-
-            if selection == 'quit':
-                break  # Exit the loop if the user enters 'quit'
-
-            while not selection.isdigit():
-                print("Invalid input. Please enter a room number or 'quit'.")
                 selection = input().strip().lower()
 
-            selection_index = int(selection)
+                if selection == 'quit':
+                    break  # Exit the loop if the user enters 'quit'
 
-            if 0 <= selection_index < len(self.rooms):
-                room = self.rooms[selection_index]
-                print(room.device.node.node_name)
-                
-                while True:
-                    print("Select action: 'turn on/off', 'send interest', 'actuate' (or 'back' to go back):")
-                    action = input().strip().lower()
+                while not selection.isdigit():
+                    print("Invalid input. Please enter a room number or 'quit'.")
+                    selection = input().strip().lower()
 
-                    if action == 'back':
-                        break
+                selection_index = int(selection)
 
-                    while action not in ['turn on', 'turn off', 'send interest', 'actuate']:
-                        print("Invalid selection. Please enter a valid action.")
+                if 0 <= selection_index < len(self.rooms):
+                    room = self.rooms[selection_index]
+                    print(room.device.node.node_name)
+                    
+                    while True:
+                        print("Select action: 'turn on/off', 'send interest', 'actuate' (or 'back' to go back):")
                         action = input().strip().lower()
 
-                    if action in ['turn on', 'turn off']:
-                        if (action == 'turn on' and not room.device.on) or (action == 'turn off' and room.device.on):
-                            print(f"Turning device {action.split()[1]}...")
-                            room.device.toggle()
-                            print(f"Device is {'on' if room.device.on else 'off'}")
-                        else:
-                            print(f"Device is already {'on' if room.device.on else 'off'}")
-                    elif action == 'send interest':
-                        print("Choose destination device:")
-                        for i, r in enumerate(self.rooms):
-                            print(f"{i}: {r.device.device_id}")
+                        if action == 'back':
+                            break
 
-                        dest_selection = input().strip()
+                        while action not in ['turn on', 'turn off', 'send interest', 'actuate']:
+                            print("Invalid selection. Please enter a valid action.")
+                            action = input().strip().lower()
 
-                        while not dest_selection.isdigit():
-                            print("Invalid input. Please enter a device number.")
+                        if action in ['turn on', 'turn off']:
+                            if (action == 'turn on' and not room.device.on) or (action == 'turn off' and room.device.on):
+                                print(f"Turning device {action.split()[1]}...")
+                                room.device.toggle()
+                                print(f"Device is {'on' if room.device.on else 'off'}")
+                            else:
+                                print(f"Device is already {'on' if room.device.on else 'off'}")
+                        elif action == 'send interest':
+                            print("Choose destination device:")
+                            for i, r in enumerate(self.rooms):
+                                print(f"{i}: {r.device.device_id}")
+
                             dest_selection = input().strip()
 
-                        dest_index = int(dest_selection)
+                            while not dest_selection.isdigit():
+                                print("Invalid input. Please enter a device number.")
+                                dest_selection = input().strip()
 
-                        if 0 <= dest_index < len(self.rooms):
-                            data_name = input('Type in data name (e.g., "temp", "humidity", "CO", "CO2", "motion", "light"): ')
-                            dest_node = self.rooms[dest_index].device.node.node_name
-                            room.device.node.create_send_interest_packet(f"{dest_node}/{data_name}", dest_node)
-                        else:
-                            print("Invalid device selection. Please enter a valid device number.")
-                    elif action == 'actuate':
-                        print("Select device to actuate:")
-                        for k in room.apparatus:
-                            print(k)
+                            dest_index = int(dest_selection)
 
-                        apparatus_selection = input().strip()
+                            if 0 <= dest_index < len(self.rooms):
+                                data_name = input('Type in data name (e.g., "temp", "humidity", "CO", "CO2", "motion", "light"): ')
+                                dest_node = self.rooms[dest_index].device.node.node_name
+                                room.device.node.create_send_interest_packet(f"{dest_node}/{data_name}", dest_node)
+                            else:
+                                print("Invalid device selection. Please enter a valid device number.")
+                        elif action == 'actuate':
+                            print("Select device to actuate:")
+                            for k in room.apparatus:
+                                print(k)
 
-                        while apparatus_selection not in room.apparatus:
-                            print("Not a valid apparatus. Please select a valid device.")
                             apparatus_selection = input().strip()
 
-                        room.device.actuate(apparatus_selection)
-                    else:
-                        print("Invalid selection")
-            else:
-                print("Invalid selection. Please enter a valid room number.")
+                            while apparatus_selection not in room.apparatus:
+                                print("Not a valid apparatus. Please select a valid device.")
+                                apparatus_selection = input().strip()
+
+                            room.device.actuate(apparatus_selection)
+                        else:
+                            print("Invalid selection")
+                else:
+                    print("Invalid selection. Please enter a valid room number.")
+        except KeyboardInterrupt:
+            pass
+        
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Simulate a Smart Home with motion detection in multiple rooms.')
@@ -120,13 +124,16 @@ def parse_args():
     return parser.parse_args()
 
 if __name__ == "__main__":
-    if not os.path.exists("device_logs"):
-        os.makedirs("device_logs")
-    if not os.path.exists("room_stats"):
-        os.makedirs("room_stats")
     args = parse_args()
-    home = SmartHome(home_id=args.home_id, n_rooms=args.rooms)
+    home_dir = f"home_{args.home_id}"
+    if not os.path.exists(home_dir):
+        os.makedirs(home_dir)
+        os.makedirs(home_dir+"/device_logs")
+        os.makedirs(home_dir+"/room_stats")
+    
+    home = SmartHome(home_id=f"home_{args.home_id}", n_rooms=args.rooms)
     home.main()
     print("Turning off devices safely...")
     for room in home.rooms:
         room.device.turn_off()
+    shutil.rmtree(f"home_{args.home_id}")

@@ -15,12 +15,13 @@ SENSOR_TYPES = ["temp", "humidity", "CO", "CO2", "motion", "light"]
 ACTUATOR_TYPES = ["heater", "ac", "humidifier", "smoke_alarm", "lights"]
 
 class Device:
-    def __init__(self, room, device_id, listening_port, broadcast_port, trusted=True):
+    def __init__(self, room, home_id, device_id, listening_port, broadcast_port, trusted=True):
         self._room = room
         self.device_id = device_id
+        self.full_id = home_id + '/' + device_id
         self.trusted = trusted
-        self.logger = logging.getLogger(f"{self.device_id}_logger")
-        handler = logging.FileHandler(f"device_logs/{self.device_id}.log")
+        self.logger = logging.getLogger(f"{self.full_id}_logger")
+        handler = logging.FileHandler(f"{home_id}/device_logs/{self.device_id}.log")
         formatter = logging.Formatter("%(asctime)s.%(msecs)04d [%(levelname)s] %(message)s", datefmt="%H:%M:%S:%m")
         handler.setFormatter(formatter)
         self.logger.addHandler(handler)
@@ -28,7 +29,7 @@ class Device:
         
         self._sensors = [self.DeviceSensor(device_id, sens_type, self._room) 
                          for sens_type in SENSOR_TYPES]
-        self.node = NDNNode(self.device_id, listening_port, broadcast_port, SENSOR_TYPES, self._sensors)
+        self.node = NDNNode(self.full_id, listening_port, broadcast_port, SENSOR_TYPES, self._sensors)
         
 
         # Default Triggers
