@@ -1,3 +1,14 @@
+"""
+NDNNode Class
+- This class constructs a Node for Named Data Network based UDP protocol for broadcasting and TCP protocol for data exchange.
+- The class offers the following functionalities:
+    1. Broadcasting presence and distance vectors between nodes.
+    2. Logics of handling and sending out broadcasting packet, routing packet, interest packet and data packet.
+    3. Register Pending Interest to PIT(Pending Interest Table) at each Node.
+    4. Save named data to CS(content store) which is cache for each Node and invalid them after certain time period.
+@co-author: Zhuofan Zhang (60%), Kim Nolle (40%)
+"""
+
 import base64
 import json
 import logging
@@ -14,17 +25,6 @@ from ECCManager import ECCManager
 from helper import build_packet, build_broadcast_packet, decode_command
 
 API_VERSION = 'v2'
-
-"""
-NDNNode Class
-- This class constructs a Node for Named Data Network based UDP protocol for broadcasting and TCP protocol for data exchange.
-- The class offers the following functionalities:
-    1. Broadcasting presence and distance vectors between nodes.
-    2. Logics of handling and sending out broadcasting packet, routing packet, interest packet and data packet.
-    3. Register Pending Interest to PIT(Pending Interest Table) at each Node.
-    4. Save named data to CS(content store) which is cache for each Node and invalid them after certain time period.
-@co-author: Zhuofan Zhang (60%), (40%)Kim Nolle
-"""
 
 class NDNNode:
     def __init__(self, node_name, port, broadcast_port, sensor_types, sensors):
