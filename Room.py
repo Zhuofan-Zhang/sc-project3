@@ -11,10 +11,11 @@ from Device import Device
 from Apparatus import Apparatus
 
 class Room:
-    def __init__(self, room_id, device_l_port, device_b_port):
+    def __init__(self, home_id, room_id, device_l_port, device_b_port):
         self.room_id = room_id
-        self.device = Device(self, str(room_id)+"_device", device_l_port, device_b_port)
-        self.stats_file = f"room_stats/{self.room_id}_stats.txt"
+        self.full_id = home_id + '/' + room_id
+        self.device = Device(self, home_id, str(room_id)+"_device", device_l_port, device_b_port)
+        self.stats_file = f"{home_id}/room_stats/{room_id}_stats.txt"
         self.stats = {
             "temp": 20,         # Temp in degrees Celsius
             "humidity": 0.4,    # Humidity percentage as decimal

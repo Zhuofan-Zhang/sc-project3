@@ -6,25 +6,29 @@ import time
 import os
 
 class RoomMonitor:
-    def monitor_input(self):
-        while True:
-            room_id_input = input("Enter room ID to monitor (or type 'quit' to exit): ").strip()
-            if room_id_input.lower() == 'quit':
-                break
-            try:
-                room_id = int(room_id_input)
-                self.display_stats(room_id)
-            except ValueError:
-                print("Invalid input. Please enter a valid room ID or 'quit'.")
+    def __init__(self):
+        self.existed = False
 
-    def display_stats(self, room_id):
-        
-        stats_file = f"room_stats/room_{room_id}_stats.txt"
+    def monitor_input(self):
+        home_id_input = input("Enter a house id: ").strip()
+        room_id_input = input("Enter room ID to monitor (or type 'quit' to exit): ").strip()
+        try:
+            home_id = int(home_id_input)
+            room_id = int(room_id_input)
+            self.display_stats(home_id, room_id)
+        except ValueError:
+            print("Invalid input. Please enter a valid room ID or 'quit'.")
+        except FileNotFoundError:
+            print("The file doesn't exist" if not self.existed else "The simulation ended")
+
+    def display_stats(self, home_id, room_id):
+        stats_file = f"home_{home_id}/room_stats/room_{room_id}_stats.txt"
         while True:
             os.system('clear' if os.name == 'posix' else 'cls') 
             with open(stats_file, "r") as file:
                 content = file.read().strip()
                 print(content)
+                self.existed = True
             time.sleep(1)
 
 

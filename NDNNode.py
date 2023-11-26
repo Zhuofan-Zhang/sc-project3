@@ -40,8 +40,9 @@ class NDNNode:
         self.sensor_types = sensor_types
         self.commands = []
         logging.getLogger().handlers = []
+        home_id, device_id = tuple(node_name.split('/'))
         self.logger = logging.getLogger(f"{self.node_name}_logger")
-        handler = logging.FileHandler(f"device_logs/{self.node_name}.log")
+        handler = logging.FileHandler(f"{home_id}/device_logs/{device_id}.log")
         formatter = logging.Formatter("%(asctime)s.%(msecs)04d [%(levelname)s] %(message)s", datefmt="%H:%M:%S:%m")
         handler.setFormatter(formatter)
         self.logger.addHandler(handler)
