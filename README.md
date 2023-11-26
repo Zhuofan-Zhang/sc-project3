@@ -1,8 +1,8 @@
-# Scalable Computing Group Project - Smart Home
+# Scalable Computing Project 3 Group 21- Smart Home
 
 Our use case was a smart home that would have devices monitoring 'stats' in a room (eg temperature, light, CO2 levels, etc.), could control 'apparatus' in the room (machines that could affect the rooms stats) and could communicate with each other if needed.
 
-## Executables
+## Overview
 
 1. `SmartHome` have rooms and devices in the rooms. They are the network.
    You can run one with the command below, and can then use the terminal to interact with devices.
@@ -31,7 +31,9 @@ python3 RoomMonitor.py
 python3 UntrustedDevice.py
 ```
 
-## Recommended Marking Steps
+## Demo Instructions
+
+### 1. Check requirements
 
 1. Make sure requirements are installed (just `pandas`)
 
@@ -39,75 +41,65 @@ python3 UntrustedDevice.py
 pip install -r requirements.txt
 ```
 
-2. Open seven terminals on the same Pi
+### 2. Set Up the Demo
 
-   - One to run `SmartHome`
-   - One to tail `Room_0` logs
-   - One to tail `Room_1` logs
-   - One to monitor `Room_0`
-   - One to monitor `Room_1`
-   - One to run `UntrustedDevice`
-   - One to tail `UntrustedDevice` logs
-
-3. Run the scripts/commands (one per terminal created in step above):
-   - `SmartHome` first to create missing directories and log/stat files
+1. Open a terminal on the Pi and run the following script/command to create a `SmartHome` instance and to create missing directories and log/stat files:
    ```shell
    python3 SmartHome.py --home_id=1 --rooms=5
    ```
-   - Open `Room_0` logs
+
+2. Open a new terminal on the same Pi and run the following script/command to view the logs of `Room_0`:
    ```shell
    tail -f device_logs/room_0_device.log
    ```
-   - Open `Room_1` logs
+
+3. Open a new terminal on the same Pi and run the following script/command to view the logs of `Room_1`:
    ```shell
    tail -f device_logs/room_1_device.log
    ```
-   - Monitor `Room_0` (enter command below then type in `0` when prompted)
-   ```shell
-   python3 RoomMonitor.py
-   ```
-   - Monitor `Room_1` (enter command below then type in `1` when prompted)
-   ```shell
-   python3 RoomMonitor.py
-   ```
-   - Run `UntrustedDevice` (don't interact with it right now, open logs first)
-   ```shell
-   python3 UntrustedDevice.py
-   ```
-   - One to tail `UntrustedDevice` logs
+
+4. Open a new terminal on the same Pi and run the following script/command to create an `UntrustedDevice` instance:
    ```shell
    tail -f device_logs/untrusted_device.log
    ```
-4. Interact with devices via `SmartHome` terminal prompts
-   EG:
 
-   - Select a device to interact with, eg. enter `0` to choose the device in Room_0
-     - Type `turn off` to turn off
-     - See device logs
-     - Type `turn on` to turn back on
-     - See device logs
-     - Type `actuate` to bring up actuation options
-       - Type the name of one of the apparatus listed, eg, `heater`
-       - This will toggle the apparatus on/off
-       - Notice change in the RoomMonitor terminal of Room_0
-     - Type `send interest` to bring up destination options
-       - Type in number of destination room, eg, `1`
-       - Type in data name (something 'correct' from the listlike `temp` or 'wrong' to see what happens)
-       - Notice activity in logs of Room_0 and Room_1
-       - Correct data name will result in the interest being received by R1, and data sent to R0
-       - Incorrect data name will result in the interest being received by R1, and a NACK sent to R0 (ie, "I don't have this")
-     - Type `back` to leave this device and select a new one or quit
-   - Type `quit` to turn off devices and the simulation
-     - Notice change in the device logs
-     - (`Ctrl+C` in the other terminals to end their processes)
+5. Open a new terminal on the same Pi and run the following script/command to view the logs of `UntrustedDevice`:
+   ```shell
+   tail -f device_logs/untrusted_device.log
+   ```
 
-5. Interact with `UntrustedDevice` (if `SmartHome` is still running)
-   EG:
+### 3. Demo Scenarios
 
-   - Choose a destination device, eg `0`
-     - Choose data name, eg `CO`
-     - Notice logs of selected room warn that an unkown packet was received, so it discarded it
-     - Notice logs of `UntrustedDevice` show it sent an interest packet but never received anything back
-   - Type `quit` when you want to exit
+#### Scenario 1: A node leaves and re-enters the network.
 
-6. Close up terminals when finished, and give us a good grade!
+1. In the first terminal that is running the `SmartHome` instance, enter `0` to choose the device in `Room_0`.
+2. Enter `turn off` to turn the device off.
+3. Notice activity in logs of `Room_0` and `Room_1`.
+3. Enter `turn on` to turn the device on.
+5. Notice activity in logs of `Room_0` and `Room_1`.
+
+#### Scenario 2: A node sends an interest packet for a data name that exists.
+
+After the steps of scenario 1, the first terminal that is running the `SmartHome` instance should still be in the menu for `Room_0`.
+
+1. Enter `send interest` to bring up destination options
+3. Enter `1` to select `Room_1` as the destination of the interest packet.
+4. Enter `temp` to send the interest packet for data `room_1_device/temp`.
+5. Notice activity in logs of `Room_0` and `Room_1`. `Room_0` sends the interest packet, which `Room_1` receives. Then `Room_1` sends a data packet with the requested data, which `Room_0` receives.
+
+#### Scenario 3: A node sends an interest packet for a data name that does not exist.
+
+After the steps of scenario 2, the first terminal that is running the `SmartHome` instance should still be in the menu for `Room_0`.
+
+1. Enter `send interest` to bring up destination options
+3. Enter `1` to select `Room_1` as the destination of the interest packet.
+4. Enter `foobar` to send the interest packet for data `room_1_device/foobar` that doesn't exist.
+5. Notice activity in logs of `Room_0` and `Room_1`. `Room_0` sends the interest packet, which `Room_1` receives. Then `Room_1` sends a data packet saying `room_1_device/foobar` doesn't exist, which `Room_0` receives.
+ 
+#### Scenario 4: A node receives a packet with unknown encryption.
+
+1. In the terminal that is running the `UntrustedDevice` instance (the 4th one opened), enter `0` to choose the device in `Room_0`.
+4. Enter `temp` to send the interest packet for data `room_0_device/temp`.
+5. Notice activity in logs of `Room_0` and `UntrustedDevice`. `UntrustedDevice` sends the interest packet, which `Room_0` receives. `Room_1` outputs that a packet with unknown encryption was received and discards the packet. Note that `UntrustedDevice` never receives anything back.
+
+### 3. Close up terminals when finished, and give us a good grade!
