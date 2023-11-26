@@ -15,6 +15,16 @@ from helper import build_packet, build_broadcast_packet, decode_command
 
 API_VERSION = 'v2'
 
+"""
+NDNNode Class
+- This class constructs a Node for Named Data Network based UDP protocol for broadcasting and TCP protocol for data exchange.
+- The class offers the following functionalities:
+    1. Broadcasting presence and distance vectors between nodes.
+    2. Logics of handling and sending out broadcasting packet, routing packet, interest packet and data packet.
+    3. Register Pending Interest to PIT(Pending Interest Table) at each Node.
+    4. Save named data to CS(content store) which is cache for each Node and invalid them after certain time period.
+@co-author: Zhuofan Zhang (60%), (40%)Kim Nolle
+"""
 
 class NDNNode:
     def __init__(self, node_name, port, broadcast_port, sensor_types, sensors):
@@ -304,7 +314,6 @@ class NDNNode:
         name = data_packet['name']
         destination = data_packet['destination']
         data = str(data_packet['data'])
-        # self.logger.debug(f"Recieved packet name: {name}, data: {data}")
 
         if name in self.pit or destination == self.node_name:
             # If this node is interested in the data or the intended recipient
@@ -346,10 +355,8 @@ class NDNNode:
                 s.connect(addr)
                 key = self.shared_secrets[peer_node_name]
                 encrypted_data = self.ecc_manager.encrypt_data(key, json_packet['data'].encode('utf-8'))
-                # self.logger.debug(f"Encrypting data {json_packet['data']}")
                 # Convert encrypted byte string to Base64 encoded string
                 json_packet['data'] = base64.b64encode(encrypted_data).decode('utf-8')
-                # packet = self.ecc_manager.encrypt_data(key, json.dumps(json_packet).encode('utf-8'))
                 packet = json.dumps(json_packet).encode('utf-8')
                 s.sendall(packet)
                 self.logger.debug(f"Sent {json_packet['type']} '{json_packet['name']}' to {json_packet['destination']}")
@@ -357,20 +364,6 @@ class NDNNode:
             except Exception as err:
                 self.logger.error(f"Error in send_packet() to {peer_node_name} {type(err).__name__}: {err}")
         return success
-    
-    # Broadcasts to all devices known devices
-    # def emit_reading(self, sensor_name, reading):
-    #     devices = [key for key in self.fib.get_peers()]
-    #     for device in devices:
-    #         data = {'type': 'data',
-    #             'version': 'v1',
-    #             'sender': self.node_name,
-    #             'destination': device,
-    #             'time_stamp': time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    #             'name': sensor_name,
-    #             'data': str(reading)}
-    #         self.logger.debug(f"Emmitting reading to {device}")
-    #         self.send_packet(device, data)
 
     def clear_content_store(self):
         while self.running:

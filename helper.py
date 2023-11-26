@@ -2,6 +2,12 @@ from datetime import datetime, timezone
 
 API_VERSION = 'v2'
 
+"""
+Packet building and decoding helper
+- In order to decouple some logic from the NDNNode and make it less lengthy. 
+  Functionalities of formatting json packets and decoding it are put in this class.  
+@co-author: Zhuofan Zhang
+"""
 
 def build_packet(packet_type, sender, destination, name, data):
     current_time_utc = datetime.now(timezone.utc)
@@ -21,26 +27,11 @@ def build_broadcast_packet(packet_type, name, data, api_version):
     
     json_packet = {'type': packet_type,
                    'version': api_version,
-                   #'sender': sender,
-                   #'destination': destination,
                    'timestamp': time_stamp,
                    'name': name,
                    'data': data}
     
     return json_packet
-
-
-#def build_broadcast_packet(packet_type, status, node_name, peer_port, public_key_pem, sensor_type):
-#    json_packet = {'type': packet_type,
-#                   'version': API_VERSION,
-#                   'status': status,
-#                   'node_name': node_name,
-#                   'peer_port': peer_port,
-#                   'public_key_pem': public_key_pem,
-#                   'sensor_types': sensor_type
-#
-#                   }
-#    return json_packet
 
 
 def decode_broadcast_packet(packet):
