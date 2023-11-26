@@ -1,10 +1,11 @@
 """
-Device class
-- 5 sensors ("temp", "humidity", "CO2", "motion", "light")
-- 5 actuators ("heater", "a/c",  "humidifier", "smoke alarm", "lights")
-- Sensors read from the room stats of the passed in Room
-- Triggers are stored on device but passed down to DeviceSensor (read DeviceSensor to see how they work)
-- Trigger condition defaults set, but no default trigger functions yet
+@author: C. Jonathan Cicai
+Device:
+    - 6 sensors ("temp", "humidity", "CO", "CO2", "motion", "light")
+    - 4 actuators ("heater", "a/c",  "humidifier", "lights")
+    - Sensors read from the room stats of the passed in Room
+    - Triggers are stored on device but passed down to DeviceSensor (read DeviceSensor to see how they work)
+    - Trigger condition defaults set, but no default trigger functions yet
 """
 
 import logging
@@ -12,7 +13,6 @@ import threading
 from NDNNode import NDNNode
 
 SENSOR_TYPES = ["temp", "humidity", "CO", "CO2", "motion", "light"]
-ACTUATOR_TYPES = ["heater", "ac", "humidifier", "smoke_alarm", "lights"]
 
 class Device:
     def __init__(self, room, home_id, device_id, listening_port, broadcast_port, trusted=True):
@@ -108,8 +108,8 @@ class Device:
             self.turn_on() if self.trusted else self.turn_on_untrusted()
 
     """
-    DeviceSensor class
-    - Reads the correct stat from the room (eg 'temp' sensor reads 'temp' stat)
+    DeviceSensor:
+        - Reads the correct stat from the room (eg 'temp' sensor reads 'temp' stat)
     """
     class DeviceSensor:
         def __init__(self, device_id, sensor_type, room):

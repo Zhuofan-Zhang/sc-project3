@@ -1,10 +1,10 @@
 """
-SmartHome class
-Example Usage
-
-python SmartHome.py --home_id 1 --n_rooms 5
-
 @author: C. Jonathan Cicai
+
+SmartHome:
+    - Sets up a smart home, with the given home_id and n_rooms
+
+Example Usage: python3 SmartHome.py --home_id=1 --rooms=2
 """
 import threading
 import random

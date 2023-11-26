@@ -1,4 +1,5 @@
 """
+@author: C. Jonathan Cicai
 Apparatus class
 
 - Listens to the device in the same room for when to turn on/off
@@ -9,7 +10,6 @@ Apparatus class
 
 Valid 'change_type' : "set_to", "increase_by", "decrease_by"
 
-@author: C. Jonathan Cicai
 """
 
 class Apparatus:

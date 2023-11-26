@@ -1,5 +1,7 @@
 """
 @author: C. Jonathan Cicai
+Room Monitor:
+    - When run in the terminal, will display rooms stats and apparatus in realtime
 """
 
 import time

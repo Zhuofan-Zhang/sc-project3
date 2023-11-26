@@ -1,5 +1,11 @@
 """
 @author: C. Jonathan Cicai
+
+UntrusedDevice: 
+    - Creates a device that does not join the network officially 
+      via 'broadcast presence' and other necessary steps. 
+    - Allows user input to interact with other devices, for analysis of security 
+      on the other devices
 """
 
 import os
