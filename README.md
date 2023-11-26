@@ -108,4 +108,4 @@ After the steps of scenario 2, the first terminal that is running the `SmartHome
 2. Enter `temp` to send the interest packet for data `room_0_device/temp`.
 3. Notice activity in logs of `Room_0` and `UntrustedDevice`. `UntrustedDevice` sends the interest packet, which `Room_0` receives. `Room_1` outputs that a packet with unknown encryption was received and discards the packet. Note that `UntrustedDevice` never receives anything back.
 
-### 3. Close up terminals when finished, and give us a good grade!
+### 4. Close up terminals when finished, and give us a good grade!
