@@ -1,3 +1,16 @@
+# -*- coding: utf-8 -*-
+"""
+Scalable Computing - Project 3
+Group 21
+
+NDN Node Class
+
+Provide NDN capabilities
+
+Authors: Zhuofan Zhang (22324372) (50%)
+         Kim Nolle (23345045) (50%)
+"""
+
 import base64
 import json
 import logging
