@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """
+@author: Kim Nolle (23345045)
 Scalable Computing - Project 3
 Group 21
 
@@ -8,8 +9,6 @@ Forwarding Information Base Class
 Stores following information about peers in the network:
 - Address as tuple of IP address and port
 - Distance vectors to other peers in network
-
-Authors: Kim Nolle (23345045)
 """
 
 # Imports

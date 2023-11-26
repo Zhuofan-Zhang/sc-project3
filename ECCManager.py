@@ -1,19 +1,19 @@
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-import os
-
 """
+@co-author: Zhuofan Zhang (55%), Ashiqur Rahman Habeeb Rahuman(45%)
 ECCManager Class
 - Elliptic Curve Cryptography is used in this class to add security implementation to our network.
 - The class offers the following functionalities:
     1. Generating private key and public key for each Name Data Network node.
     2. Generating shared key between any pair of nodes to establish trusted connections.
     3. Encrypt and decrypt data using shared secrets.
-@co-author: Zhuofan Zhang (55%), Ashiqur Rahman Habeeb Rahuman(45%)
 """
+
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+import os
 
 class ECCManager:
     def __init__(self):

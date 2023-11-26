@@ -1,13 +1,13 @@
-from datetime import datetime, timezone
-
-API_VERSION = 'v2'
-
 """
+@co-author: Zhuofan Zhang
 Packet building and decoding helper
 - In order to decouple some logic from the NDNNode and make it less lengthy. 
   Functionalities of formatting json packets and decoding it are put in this class.  
-@co-author: Zhuofan Zhang
 """
+
+from datetime import datetime, timezone
+
+API_VERSION = 'v2'
 
 def build_packet(packet_type, sender, destination, name, data):
     current_time_utc = datetime.now(timezone.utc)
