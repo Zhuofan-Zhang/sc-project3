@@ -1,5 +1,7 @@
 # Scalable Computing Project 3 Group 21- Smart Home
 
+####K. Nolle (23345045), C. J. Cicai (19335265), A. R. Habeeb (23352045), Z. Zhang (22324372)
+
 Our use case was a smart home that would have devices monitoring 'stats' in a room (eg temperature, light, CO2 levels, etc.), could control 'apparatus' in the room (machines that could affect the rooms stats) and could communicate with each other if needed.
 
 ## Overview
