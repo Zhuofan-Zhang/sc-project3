@@ -102,9 +102,9 @@ class Device:
     
     def toggle(self):
         if self.on:
-            self.turn_off() if self.trusted else self.turn_on_untrusted()
+            self.turn_off() 
         else:
-            self.turn_on()
+            self.turn_on() if self.trusted else self.turn_on_untrusted()
 
     """
     DeviceSensor class
